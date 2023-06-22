@@ -1,0 +1,34 @@
+{
+  "name": "raw-profiler",
+  "version": "1.0.0",
+  "description": "A robust, heavy-duty javascript application profiler and logger for production environments.",
+  "main": "profiling.js",
+  "keywords": [
+    "profiler",
+    "profiling",
+    "logger",
+    "logging"
+  ],
+  "author": "Daniel Apostolov",
+  "license": "MIT/X",
+  "maintainers": [
+    {
+      "email": "daniel@igium.com",
+      "name": "daniel"
+    }
+  ],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "engines": {
+    "node": ">= 5"
+  },
+  "dependencies": {
+	"async": "~2.1.4",
+	"archiver": "~1.3.0",
+    "body-parser": "~1.15.2",
+    "express": "^4.14.0",
+    "method-override": "~2.3.7",
+    "request": "~2.79.0"
+  }
+}
