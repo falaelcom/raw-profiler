@@ -488,7 +488,7 @@ TODO
 LICENSE
 ==================================================
 
-MIT/X License _(see the included LICENSE file)_.
+MIT/X Consortium License _(see the included LICENSE file)_.
 
 BUG REPORTS
 ==================================================
