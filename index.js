@@ -1,30 +1,30 @@
-var fs = require("fs");
-var path = require("path");
-var os = require("os");
-var archiver = require("archiver");
-var async = require("async");
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
+const archiver = require("archiver");
+const async = require("async");
 
-var commandFileName = "__pfenable";
-var fileLoggerDirectory = "__pflogs";
-var defaultLogDelayMs = 0;
+const COMMAND_FILE_NAME = "__pfenable";
+const FILE_LOGGER_DIRECTORY = "__pflogs";
+const DEFAULT_LOG_DELAY_MS = 0;
+const HOME_DIRECTORY = process.env.HOME || process.env.USERPROFILE;	//	HOME in linux, USERPROFILE in windows
 
-var configurationFileName = "__pfconfig";
-var configurationRefreshSilenceTimeoutMs = 5000;
-var configField_sortColumn = "sortColumn";
-var defaultSortColumn = "maxMs";
-var configField_archivePath = "archivePath";
-var configField_verbosity = "verbosity";
-var EVerbosity =
+const configurationFileName = "__pfconfig";
+const configurationRefreshSilenceTimeoutMs = 5000;
+const configField_sortColumn = "sortColumn";
+const defaultSortColumn = "maxMs";
+const configField_archivePath = "archivePath";
+const configField_verbosity = "verbosity";
+const EVerbosity =
 {
 	Log: "log",
 	Brief: "brief",
 	Full: "full",
 }
-var defaultVerbosity = "full";
-var configField_buckets = "buckets";
+const defaultVerbosity = "full";
+const configField_buckets = "buckets";
 
-//<editor-fold desc="Profiler">
-
+//#region Profiler
 function Profiler(configuration)
 {
 	this.configuration = configuration;
@@ -54,7 +54,7 @@ Profiler.prototype.begin = function(bucket, key, title)
 
 Profiler.prototype.end = function(hit, lastMessage)
 {
-	var target = this.targetMap[hit.bucket + "*" + hit.key];
+	const target = this.targetMap[hit.bucket + "*" + hit.key];
 	if(!target)
 	{
 		return;
@@ -75,7 +75,7 @@ Profiler.prototype.reset = function()
 
 Profiler.prototype._ensure = function(key, bucket)
 {
-	var target = this.targetMap[bucket + "*" + key];
+	let target = this.targetMap[bucket + "*" + key];
 	if(!target)
 	{
 		target = new ProfilerTarget(bucket, key);
@@ -100,42 +100,42 @@ Profiler.osResourceStats =
 
 function _startCpuMonitoring()
 {
-	var getAvgUsage = function(snapshot1, snapshot2)
+	const getAvgUsage = function(snapshot1, snapshot2)
 	{
-		var total = 0;
-		for(var length = snapshot1.length, i = 0; i < length; ++i)
+		let total = 0;
+		for(let length = snapshot1.length, i = 0; i < length; ++i)
 		{
-			var item1 = snapshot1[i];
-			var item2 = snapshot2[i];
+			const item1 = snapshot1[i];
+			const item2 = snapshot2[i];
 
-			var idleDifference = item2.idle - item1.idle;
-			var busyDifference = item2.busy - item1.busy;
+			const idleDifference = item2.idle - item1.idle;
+			const busyDifference = item2.busy - item1.busy;
 
 			total += 100 - ~~(100 * idleDifference / busyDifference);  //  ~~ is a faster Math.floor
 		}
 		return (Math.floor(total * 100 / snapshot1.length) / 100);
 	}
 
-	var maxTimeWindowMs = 15 * 60 * 1000;       //  15 min
-	var resolutionMs = 5 * 1000;                //   5 sec
-	var snapshotHistorySize = Math.ceil(maxTimeWindowMs / resolutionMs) + 1;
-	var snapshotHistory = Array(snapshotHistorySize).fill(null);
-	var snapshotHistoryLastIndex = snapshotHistory.length - 1;
-	var snapshotHistoryFirstIndex = snapshotHistoryLastIndex;
+	const maxTimeWindowMs = 15 * 60 * 1000;       //  15 min
+	const resolutionMs = 5 * 1000;                //   5 sec
+	const snapshotHistorySize = Math.ceil(maxTimeWindowMs / resolutionMs) + 1;
+	const snapshotHistory = Array(snapshotHistorySize).fill(null);
+	const snapshotHistoryLastIndex = snapshotHistory.length - 1;
+	let snapshotHistoryFirstIndex = snapshotHistoryLastIndex;
 
 	setInterval(function()
 	{
-		var snapshot = MachineStats.getOsCpusUsage();
+		const snapshot = MachineStats.getOsCpusUsage();
 		snapshotHistory.push(snapshot);
 		snapshotHistory.shift();
 
 		if(snapshotHistoryFirstIndex != snapshotHistoryLastIndex)
 		{
-			var timeWindowMs, snapshotHistoryIndex;
-			timeWindowMs =      10 * 1000; snapshotHistoryIndex = Math.max(snapshotHistoryLastIndex - Math.ceil(timeWindowMs / resolutionMs), snapshotHistoryFirstIndex); var lastSnapshot_10sec = snapshotHistory[snapshotHistoryIndex];
-			timeWindowMs =      60 * 1000; snapshotHistoryIndex = Math.max(snapshotHistoryLastIndex - Math.ceil(timeWindowMs / resolutionMs), snapshotHistoryFirstIndex); var lastSnapshot_1min  = snapshotHistory[snapshotHistoryIndex];
-			timeWindowMs =  5 * 60 * 1000; snapshotHistoryIndex = Math.max(snapshotHistoryLastIndex - Math.ceil(timeWindowMs / resolutionMs), snapshotHistoryFirstIndex); var lastSnapshot_5min  = snapshotHistory[snapshotHistoryIndex];
-			timeWindowMs = 15 * 60 * 1000; snapshotHistoryIndex = Math.max(snapshotHistoryLastIndex - Math.ceil(timeWindowMs / resolutionMs), snapshotHistoryFirstIndex); var lastSnapshot_15min = snapshotHistory[snapshotHistoryIndex];
+			let timeWindowMs, snapshotHistoryIndex;
+			timeWindowMs =      10 * 1000; snapshotHistoryIndex = Math.max(snapshotHistoryLastIndex - Math.ceil(timeWindowMs / resolutionMs), snapshotHistoryFirstIndex); const lastSnapshot_10sec = snapshotHistory[snapshotHistoryIndex];
+			timeWindowMs =      60 * 1000; snapshotHistoryIndex = Math.max(snapshotHistoryLastIndex - Math.ceil(timeWindowMs / resolutionMs), snapshotHistoryFirstIndex); const lastSnapshot_1min  = snapshotHistory[snapshotHistoryIndex];
+			timeWindowMs =  5 * 60 * 1000; snapshotHistoryIndex = Math.max(snapshotHistoryLastIndex - Math.ceil(timeWindowMs / resolutionMs), snapshotHistoryFirstIndex); const lastSnapshot_5min  = snapshotHistory[snapshotHistoryIndex];
+			timeWindowMs = 15 * 60 * 1000; snapshotHistoryIndex = Math.max(snapshotHistoryLastIndex - Math.ceil(timeWindowMs / resolutionMs), snapshotHistoryFirstIndex); const lastSnapshot_15min = snapshotHistory[snapshotHistoryIndex];
 
 			Profiler.osResourceStats.avgCpu10sec = lastSnapshot_10sec ? getAvgUsage(lastSnapshot_10sec, snapshot) : 0;
 			Profiler.osResourceStats.avgCpu1min  = lastSnapshot_1min ? getAvgUsage(lastSnapshot_1min, snapshot) : 0;
@@ -156,10 +156,9 @@ function _startCpuMonitoring()
 		if(snapshotHistoryFirstIndex > 0) --snapshotHistoryFirstIndex;
 	}, resolutionMs);
 }
-//</editor-fold>
+//#endregion
 
-//<editor-fold desc="ProfilerTarget">
-
+//#region ProfilerTarget
 function ProfilerTarget(bucket, key)
 {
 	this.bucket = bucket || "";
@@ -182,7 +181,7 @@ function ProfilerTarget(bucket, key)
 
 ProfilerTarget.prototype.getStats = function()
 {
-	var result = {};
+	const result = {};
 
 	result.bucket = this.bucket;
 	result.key = this.key;
@@ -238,8 +237,8 @@ ProfilerTarget.prototype.done = function(hit, lastMessage, hitCount, openHitsCou
 		return;
 	}
 
-	var hrtimespan = process.hrtime(hit.hrtime);
-	var ns = _hrtimeToNs(hrtimespan);
+	const hrtimespan = process.hrtime(hit.hrtime);
+	const ns = _hrtimeToNs(hrtimespan);
 
 	++this.stats.count;
 
@@ -289,11 +288,9 @@ ProfilerTarget.prototype.done = function(hit, lastMessage, hitCount, openHitsCou
 		hit.title += lastMessage;
 	}
 };
+//#endregion
 
-//</editor-fold>
-
-//<editor-fold desc="MachineStats">
-
+//#region MachineStats
 function MachineStats()
 {
 }
@@ -305,9 +302,9 @@ MachineStats.hit = function()
 
 MachineStats.done = function(hit)
 {
-	var snapshot = MachineStats.getSnapshot(hit.hrtime);
+	const snapshot = MachineStats.getSnapshot(hit.hrtime);
 
-	var result =
+	const result =
 	{
 		timeNs: snapshot.hrtime,
 		timeMs: Math.round(snapshot.hrtime / 1000000),
@@ -335,10 +332,10 @@ MachineStats.done = function(hit)
 	};
 
 	//  ps cpu usage
-	var time_micros = Math.round(snapshot.hrtime / 1000);
-	var deltaKernelBusy_micros = snapshot.psCpuUsage.system - hit.psCpuUsage.system;
+	const time_micros = Math.round(snapshot.hrtime / 1000);
+	const deltaKernelBusy_micros = snapshot.psCpuUsage.system - hit.psCpuUsage.system;
 	result.psCpuUsage_kernel = ~~(100 * deltaKernelBusy_micros / time_micros);  //  ~~ is a faster Math.floor
-	var deltaUserBusy_micros = snapshot.psCpuUsage.user - hit.psCpuUsage.user;
+	const deltaUserBusy_micros = snapshot.psCpuUsage.user - hit.psCpuUsage.user;
 	result.psCpuUsage_application = ~~(100 * deltaUserBusy_micros / time_micros);  //  ~~ is a faster Math.floor
 	result.psCpuUsage = result.psCpuUsage_kernel + result.psCpuUsage_application;
 
@@ -348,15 +345,15 @@ MachineStats.done = function(hit)
 	result.psMemUsage_delta = result.psMemUsage_end - result.psMemUsage_begin;
 
 	//  os cpu usage
-	for(var length = hit.osCpusUsage.length, i = 0; i < length; ++i)
+	for(let length = hit.osCpusUsage.length, i = 0; i < length; ++i)
 	{
-		var item1 = hit.osCpusUsage[i];
-		var item2 = snapshot.osCpusUsage[i];
+		const item1 = hit.osCpusUsage[i];
+		const item2 = snapshot.osCpusUsage[i];
 
-		var idleDifference = item2.idle - item1.idle;
-		var busyDifference = item2.busy - item1.busy;
+		const idleDifference = item2.idle - item1.idle;
+		const busyDifference = item2.busy - item1.busy;
 
-		var resultItem = 100 - ~~(100 * idleDifference / busyDifference);  //  ~~ is a faster Math.floor
+		const resultItem = 100 - ~~(100 * idleDifference / busyDifference);  //  ~~ is a faster Math.floor
 		result.osCpusUsage.push(resultItem);
 
 		result.osMaxCpu = Math.max(result.osMaxCpu, resultItem);
@@ -394,18 +391,18 @@ MachineStats.getSnapshot = function(hrtime)
 
 MachineStats.getOsCpusUsage = function()
 {
-	var result = [];
-	var osCpus = os.cpus();
+	const result = [];
+	const osCpus = os.cpus();
 
-	for(var length = osCpus.length, i = 0; i < length; ++i)
+	for(let length = osCpus.length, i = 0; i < length; ++i)
 	{
-		var cpu = osCpus[i];
-		var item =
+		const cpu = osCpus[i];
+		const item =
 		{
 			busy: 0,
 			idle: cpu.times.idle,
 		};
-		for(type in cpu.times)
+		for(const type in cpu.times)
 		{
 			item.busy += cpu.times[type];
 		}
@@ -414,10 +411,9 @@ MachineStats.getOsCpusUsage = function()
 
 	return result;
 }
+//#endregion
 
-//</editor-fold>
-
-//<editor-fold desc="Configuration">
+//#region Configuration
 function Configuration(par)
 {
 	this.path = par.path;
@@ -464,7 +460,7 @@ Configuration.prototype.isBucketEnabled = function(bucketKey)
 	{
 		return true;
 	}
-	var bucketConfig = this.bucketSettings[bucketKey];
+	const bucketConfig = this.bucketSettings[bucketKey];
 	return !(bucketConfig && bucketConfig.enabled === false);
 }
 
@@ -474,7 +470,7 @@ Configuration.prototype.getBucketSortColumn = function(bucketKey)
 	{
 		return this.sortColumn;
 	}
-	var bucketConfig = this.bucketSettings[bucketKey];
+	const bucketConfig = this.bucketSettings[bucketKey];
 	if(!bucketConfig)
 	{
 		return this.sortColumn;
@@ -484,8 +480,8 @@ Configuration.prototype.getBucketSortColumn = function(bucketKey)
 
 Configuration.prototype._reload = function(callback)
 {
-	var stats;
-	var json;
+	let stats;
+	let json;
 	return async.waterfall(
 	[
 		function(next)
@@ -527,7 +523,7 @@ Configuration.prototype._reload = function(callback)
 			}
 			catch (ex)
 			{
-				console.log(236851, "[mc-profiler]", "Error in preferences JSON (file path \"" + this.path + "\"): ", ex);
+				console.log(236851, "[raw-profiler]", "Error in preferences JSON (file path \"" + this.path + "\"): ", ex);
 				return next(true);
 			}
 
@@ -540,7 +536,7 @@ Configuration.prototype._reload = function(callback)
 		}
 		if(err)
 		{
-			console.log(2368501, "[mc-profiler]", "Error reading the preferences JSON (file path \"" + this.path + "\"): ", err);
+			console.log(2368501, "[raw-profiler]", "Error reading the preferences JSON (file path \"" + this.path + "\"): ", err);
 		}
 		return callback();
 	}.bind(this));
@@ -553,16 +549,16 @@ Configuration.prototype._readPreferences = function(preferences)
 	if(preferences[configField_sortColumn] && this.sortColumn != preferences[configField_sortColumn])
 	{
 		this.sortColumn = preferences[configField_sortColumn];
-		console.log("[mc-profiler]", "Using default soring column \"" + this.sortColumn + "\"");
+		console.log("[raw-profiler]", "Using default soring column \"" + this.sortColumn + "\"");
 	}
 	if(preferences[configField_verbosity] && this.verbosity != preferences[configField_verbosity])
 	{
 		this.verbosity = preferences[configField_verbosity];
-		console.log("[mc-profiler]", "Using verbosity level \"" + this.verbosity + "\"");
+		console.log("[raw-profiler]", "Using verbosity level \"" + this.verbosity + "\"");
 	}
 	if(preferences[configField_archivePath])
 	{
-		var archiveFullPath = path.resolve(process.env.HOME, preferences[configField_archivePath]);
+		const archiveFullPath = path.resolve(HOME_DIRECTORY, preferences[configField_archivePath]);
 		if(archiveFullPath != this.archiveFullPath)
 		{
 			try
@@ -571,25 +567,24 @@ Configuration.prototype._readPreferences = function(preferences)
 				if(this.archiveFullPath != archiveFullPath)
 				{
 					this.archiveFullPath = archiveFullPath;
-					console.log("[mc-profiler]", "Using archive path \"" + this.archiveFullPath + "\"");
+					console.log("[raw-profiler]", "Using archive path \"" + this.archiveFullPath + "\"");
 				}
 			}
 			catch(ex)
 			{
-				console.log(246281, "[mc-profiler]", "Cannot access archive path \"" + archiveFullPath + "\", will keep using the old setting \"" + (this.archiveFullPath || "(default)") + "\": ", ex);
+				console.log(246281, "[raw-profiler]", "Cannot access archive path \"" + archiveFullPath + "\", will keep using the old setting \"" + (this.archiveFullPath || "(default)") + "\": ", ex);
 			}
 		}
 	}
 	if(preferences[configField_buckets] && JSON.stringify(this.bucketSettings) != JSON.stringify(preferences[configField_buckets]))
 	{
 		this.bucketSettings = preferences[configField_buckets];
-		console.log("[mc-profiler]", "Using new bucket settings", this.bucketSettings);
+		console.log("[raw-profiler]", "Using new bucket settings", this.bucketSettings);
 	}
 }
-//</editor-fold>
+//#endregion
 
-//<editor-fold desc="DataCollector">
-
+//#region DataCollector
 function DataCollector(configuration)
 {
 	this.configuration = configuration;
@@ -602,11 +597,10 @@ function DataCollector(configuration)
 	this.logger = Profiler.ConsoleLogger;
 }
 
-
 DataCollector.prototype.config = function(par)
 {
 	this.logger = par.logger || Profiler.ConsoleLogger;
-	this.logDelayMs = par.logDelayMs || defaultLogDelayMs;
+	this.logDelayMs = par.logDelayMs || DEFAULT_LOG_DELAY_MS;
 }
 
 DataCollector.prototype.feed = function(targetStats, hit)
@@ -618,7 +612,7 @@ DataCollector.prototype.feed = function(targetStats, hit)
 		return;
 	}
 
-	var key = hit.bucket + "*" + hit.key;
+	const key = hit.bucket + "*" + hit.key;
 	this.targetStatsMap[key] =
 	{
 		bucket: hit.bucket,
@@ -642,7 +636,7 @@ DataCollector.prototype.feed = function(targetStats, hit)
 				this.loggingWaiting = false;
 				if(err)
 				{
-					console.log(2765501, "[mc-profiler]", "Error flushing collected data: ", err, err.stack);
+					console.log(2765501, "[raw-profiler]", "Error flushing collected data: ", err, err.stack);
 				}
 			}.bind(this));
 		}.bind(this), this.logDelayMs);
@@ -658,13 +652,13 @@ DataCollector.prototype.reset = function()
 DataCollector.prototype._tryFlushLoggingCueue = function(callback)
 {
 	return async.whilst(
-		function test()
+		function test(callback)
 		{
-			return this.loggingCueue.length != 0;
+			return callback(null, this.loggingCueue.length != 0);
 		}.bind(this),
 		function execute(next)
 		{
-			var item = this.loggingCueue.shift();
+			const item = this.loggingCueue.shift();
 			if(!item)
 			{
 				return next();
@@ -704,11 +698,11 @@ DataCollector.prototype._getStats = function(ascending)
 {
 	ascending = !!ascending;
 
-	var result = {};
-	for(var key in this.targetStatsMap)
+	const result = {};
+	for(const key in this.targetStatsMap)
 	{
-		var item = this.targetStatsMap[key];
-		var bucket = result[item.bucket];
+		const item = this.targetStatsMap[key];
+		let bucket = result[item.bucket];
 		if(!bucket)
 		{
 			bucket = [];
@@ -717,18 +711,18 @@ DataCollector.prototype._getStats = function(ascending)
 		bucket.push(item.targetStats);
 	}
 
-	for(var bucketKey in result)
+	for (const bucketKey in result)
 	{
-		var bucket = result[bucketKey];
-		var sortPropertyName = this.configuration.getBucketSortColumn(bucketKey);
+		const bucket = result[bucketKey];
+		const sortPropertyName = this.configuration.getBucketSortColumn(bucketKey);
 		bucket.sort(function(left, right)
 		{
-			var leftValue = left[sortPropertyName];
-			var rightValue = right[sortPropertyName];
+			const leftValue = left[sortPropertyName];
+			const rightValue = right[sortPropertyName];
 
 			if((!leftValue && leftValue !== 0) || (!rightValue && rightValue !== 0))
 			{
-				console.log(634253, "[mc-profiler]", "Possibly wrong sort column name: \"" + sortPropertyName + "\", values: \"" + leftValue + "\", \"" + rightValue + "\"");
+				console.log(634253, "[raw-profiler]", "Possibly wrong sort column name: \"" + sortPropertyName + "\", values: \"" + leftValue + "\", \"" + rightValue + "\"");
 			}
 
 			if(ascending)
@@ -748,11 +742,11 @@ DataCollector.formatStats = function(stats, time, title, currentMachineStats, cu
 {
 	try
 	{
-		var result = {};
-		var headerBucket = {};
+		const result = {};
+		const headerBucket = {};
 		result["header"] = headerBucket;
 
-		var sb = [];
+		const sb = [];
 
 		sb.push(fdate(time) + " - " + title);
 		sb.push('\n');
@@ -797,13 +791,13 @@ DataCollector.formatStats = function(stats, time, title, currentMachineStats, cu
 
 DataCollector.formatMachineStats = function(machineStats)
 {
-	var delimiter = "│ ";
-	var rowSize = 100;
-	var psColSize = 40;
-	var osColSize = 40;
-	var labelColSize = rowSize - psColSize - osColSize - 2 * delimiter.length;
+	const delimiter = "│ ";
+	const rowSize = 100;
+	const psColSize = 40;
+	const osColSize = 40;
+	const labelColSize = rowSize - psColSize - osColSize - 2 * delimiter.length;
 
-	var sb = [];
+	const sb = [];
 	sb.push(rep(rowSize, "─"));
 	sb.push('\n');
 
@@ -822,14 +816,14 @@ DataCollector.formatMachineStats = function(machineStats)
 	sb.push(rep(rowSize, "─"));
 	sb.push('\n');
 	printMetric("Uptime", fduration(machineStats.psUptime * 1000), fduration(machineStats.osUptime * 1000));
-	var cpuAvgText = "1 min: " + Math.round(machineStats.osAvgLoad_end) + "% " +
+	const cpuAvgText = "1 min: " + Math.round(machineStats.osAvgLoad_end) + "% " +
 		"5 min: " + Math.round(machineStats.osAvgLoad5min_end) + "% " +
 		"15 min: " + Math.round(machineStats.osAvgLoad5min_end) + "%";
 	printMetric("CPU avg", "n/a", cpuAvgText);
 
-	var psCpuText = "CPU kernel: " + machineStats.psCpuUsage + "%, app: " + machineStats.psCpuUsage_application + "%";
-	var sbOsCpuText = [];
-	for(var length = machineStats.osCpusUsage.length, i = 0; i < length; ++i)
+	const psCpuText = "CPU kernel: " + machineStats.psCpuUsage + "%, app: " + machineStats.psCpuUsage_application + "%";
+	const sbOsCpuText = [];
+	for(let length = machineStats.osCpusUsage.length, i = 0; i < length; ++i)
 	{
 		if(i)
 		{
@@ -852,21 +846,21 @@ DataCollector.formatMachineStats = function(machineStats)
 
 DataCollector.formatHitStats = function(hitStats)
 {
-	var delimiter = " │ ";
+	const delimiter = " │ ";
 
-	var diffLocalIndexColSize = 10;
-	var hitLocalIndexColSize = 10;
-	var doneLocalIndexColSize = 10;
-	var diffIndexColSize = 10;
-	var hitIndexColSize = 10;
-	var doneIndexColSize = 10;
-	var diffOpenHitsCountColSize = 10;
-	var hitOpenHitsCountColSize = 10;
-	var doneOpenHitsCountColSize = 10;
-	var durationColSize = 10;
-	var avgCpuColSize = 10;
+	const diffLocalIndexColSize = 10;
+	const hitLocalIndexColSize = 10;
+	const doneLocalIndexColSize = 10;
+	const diffIndexColSize = 10;
+	const hitIndexColSize = 10;
+	const doneIndexColSize = 10;
+	const diffOpenHitsCountColSize = 10;
+	const hitOpenHitsCountColSize = 10;
+	const doneOpenHitsCountColSize = 10;
+	const durationColSize = 10;
+	const avgCpuColSize = 10;
 
-	var sb = [];
+	const sb = [];
 
 	function printRow(fields)
 	{
@@ -908,7 +902,7 @@ DataCollector.formatHitStats = function(hitStats)
 		duration: "duration",
 		avgCpu: "CPU%",
 	});
-	var rowSize = sb.join("").length;
+	const rowSize = sb.join("").length;
 	sb.push('\n');
 	sb.push(rep(rowSize, "─"));
 	sb.push('\n');
@@ -938,9 +932,9 @@ DataCollector.formatBucket = function(bucketKey, bucket, currentHitKey)
 {
 	function printStat(sb, stat, isCurrent)
 	{
-		var keyFieldWidth = 71;
+		let keyFieldWidth = 71;
 
-		var discrepancy = parseInt(stat.discrepancy);
+		const discrepancy = parseInt(stat.discrepancy);
 		if(!isNaN(discrepancy) && discrepancy != 0)
 		{
 			sb.push(rpad("!!!", 4, ' '));
@@ -996,7 +990,7 @@ DataCollector.formatBucket = function(bucketKey, bucket, currentHitKey)
 		sb.push(' │ ');
 	}
 
-	var headerDef =
+	const headerDef =
 	{
 		bucketKey: bucketKey,
 		key: "key",
@@ -1014,15 +1008,15 @@ DataCollector.formatBucket = function(bucketKey, bucket, currentHitKey)
 		maxDateTime: "max event time",
 	};
 
-	var sb = [];
-	var sbBrief = [];
-	var headerStart = sb.join("").length;
+	const sb = [];
+	const sbBrief = [];
+	const headerStart = sb.join("").length;
 
 	printStat(sb, headerDef);
 	printStat(sbBrief, headerDef);
 
-	var headerEnd = sb.join("").length;
-	var rowSize = headerEnd - headerStart - 2;
+	const headerEnd = sb.join("").length;
+	const rowSize = headerEnd - headerStart - 2;
 
 	sb.push('\n');
 	sb.push(rep(rowSize, "─"));
@@ -1032,9 +1026,9 @@ DataCollector.formatBucket = function(bucketKey, bucket, currentHitKey)
 	sbBrief.push(rep(rowSize, "─"));
 	sbBrief.push('\n');
 
-	for(var length = bucket.length, i = 0; i < length; ++i)
+	for(let length = bucket.length, i = 0; i < length; ++i)
 	{
-		var item = bucket[i];
+		const item = bucket[i];
 
 		printStat(sb, item, currentHitKey == item.key);
 		sb.push('\n');
@@ -1058,11 +1052,9 @@ DataCollector.formatBucket = function(bucketKey, bucket, currentHitKey)
 		brief: sbBrief.join(""),
 	};
 }
+//#endregion
 
-//</editor-fold>
-
-//<editor-fold desc="DataCollectorServer">
-
+//#region DataCollectorServer
 function DataCollectorServer(par, configuration)
 {
 	this.configuration = configuration;
@@ -1072,7 +1064,7 @@ function DataCollectorServer(par, configuration)
 	this.logDirectory = par.logDirectory;
 	this.maxLogSizeBytes = par.maxLogSizeBytes || 200 * 1024 * 1024;            //  200Mb
 	this.maxArchiveSizeBytes = par.maxArchiveSizeBytes || 1024 * 1024 * 1024;   //  1Gb
-	this.logDelayMs = par.logDelayMs || defaultLogDelayMs;
+	this.logDelayMs = par.logDelayMs || DEFAULT_LOG_DELAY_MS;
 	this.logRequestArchivingModulo = par.logRequestArchivingModulo || 100;
 
 	this.dataCollectors = {};
@@ -1080,22 +1072,22 @@ function DataCollectorServer(par, configuration)
 
 DataCollectorServer.prototype.run = function(par)
 {
-	var getSourceCallback = par ? par.getSourceCallback : null;
+	const getSourceCallback = par ? par.getSourceCallback : null;
 
-	var uncaughtExceptionFunc = function ( err, data )
+	const uncaughtExceptionFunc = function ( err, data )
 	{
-		console.log( "[mc-profiler]", "--- EXCEPTION ---" );
-		console.log( "[mc-profiler]", err );
-		console.log( "[mc-profiler]", err.stack || err.message );
-		console.log( "[mc-profiler]", data );
+		console.log( "[raw-profiler]", "--- EXCEPTION ---" );
+		console.log( "[raw-profiler]", err );
+		console.log( "[raw-profiler]", err.stack || err.message );
+		console.log( "[raw-profiler]", data );
 	};
 	process.on( 'uncaughtException', uncaughtExceptionFunc );
 
-	var express = require( 'express');
-	var methodOverride = require('method-override');
-	var bodyParser = require('body-parser');
+	const express = require( 'express');
+	const methodOverride = require('method-override');
+	const bodyParser = require('body-parser');
 
-	var app = express();
+	const app = express();
 
 	app.use(methodOverride());
 	app.use(bodyParser.json({
@@ -1108,37 +1100,37 @@ DataCollectorServer.prototype.run = function(par)
 
 	app.post('/feed', function (req, res)
 	{
-		var source;
+		let source;
 		if(getSourceCallback)
 		{
 			source = getSourceCallback(req, res) || "";
 		}
 		else
 		{
-			var connection = req.connection || {};
-			var socket = req.socket || connection.socket || {};
+			const connection = req.connection || {};
+			const socket = req.socket || connection.socket || {};
 			source = connection.remoteAddress || socket.remoteAddress || "";
 		}
 		source = source.replace(/\D/g, '.');
 		if(req.body.sourceName)
 		{
-			var strippedSourceName = req.body.sourceName.replace(/([^a-z0-9_\-]+)/gi, "-");
+			const strippedSourceName = req.body.sourceName.replace(/([^a-z0-9_\-]+)/gi, "-");
 			source += "-" + strippedSourceName;
 		}
 		this._ensureDataCollector(source).feed(req.body.targetStats, req.body.hit);
 		res.end("");
 	}.bind(this));
 
-	console.log("[mc-profiler]", "Data collector server listenig on " + this.host + ":" + this.port);
+	console.log("[raw-profiler]", "Data collector server listenig on " + this.host + ":" + this.port);
 	app.listen(this.port, this.host);
 }
 
 DataCollectorServer.prototype._ensureDataCollector = function(source)
 {
-	var dataCollector = this.dataCollectors[source];
+	const dataCollector = this.dataCollectors[source];
 	if(!dataCollector)
 	{
-		var fileLogger = new FileLogger(
+		const fileLogger = new FileLogger(
 		{
 			source: source,
 			maxLogSizeBytes: this.maxLogSizeBytes,
@@ -1153,11 +1145,9 @@ DataCollectorServer.prototype._ensureDataCollector = function(source)
 
 	return dataCollector;
 }
+//#endregion
 
-//</editor-fold>
-
-//<editor-fold desc="DataCollectorHttpProxy">
-
+//#region DataCollectorHttpProxy
 function DataCollectorHttpProxy(uri, sourceName, configuration)
 {
 	this.uri = uri;
@@ -1170,7 +1160,7 @@ function DataCollectorHttpProxy(uri, sourceName, configuration)
 	this.failureTime = null;
 	this.failureTimeoutMs = 15 * 1000;
 
-	console.log("[mc-profiler]", "Feeding data to " + this.uri);
+	console.log("[raw-profiler]", "Feeding data to " + this.uri);
 }
 
 DataCollectorHttpProxy.prototype.config = function(par)
@@ -1182,61 +1172,62 @@ DataCollectorHttpProxy.prototype.feed = function(targetStats, hit)
 {
 	this.configuration.smartRefresh();
 
-	setImmediate(function()
+	setImmediate(() =>
 	{
-		var start = new Date();
-		var request = require("request");
-		request(
-		{
-			uri: this.uri,
-			method: "POST",
-			timeout: this.requestTimeout,
-			time: true,
-			json:
+		const start = new Date();
+		const fetch = require("node-fetch");
+		fetch(
+			this.uri,
 			{
-				targetStats: targetStats,
-				hit: hit,
-				sourceName: this.sourceName,
+				method: "POST",
+				timeout: this.requestTimeout,
+				headers: {
+					"Content-Type": 'application/json'
+				},
+				body: JSON.stringify({
+					targetStats,
+					hit,
+					sourceName: this.sourceName,
+				}),
 			}
-		},
-		function(error, response, body)
+		)
+		.then(response =>
 		{
-			var end = new Date();
-			var durationMs = end.getTime() - start.getTime();
-			if(error || body)
+			if (!response.ok || response.text())
 			{
+				const end = new Date();
+				const durationMs = end.getTime() - start.getTime();
+
 				this.failureCounter++;
-				if(!this.failureTime || new Date().getTime() - this.failureTime.getTime() >= this.failureTimeoutMs)
+				if (!this.failureTime || new Date().getTime() - this.failureTime.getTime() >= this.failureTimeoutMs)
 				{
 					this.failureTime = new Date();
-					console.log(49576325, "[mc-profiler]", error || body, "" + this.failureCounter + " feed(s) lost. Failing request took " + durationMs + "ms.");
+					console.log(49576325, "[raw-profiler]", error || body, "" + this.failureCounter + " feed(s) lost. Failing request took " + durationMs + "ms.");
 				}
 			}
 			else
 			{
-				if(this.failureCounter)
+				if (this.failureCounter)
 				{
-					console.log(49576326, "[mc-profiler]", "" + this.failureCounter + " feed(s) lost. Now resuming normal operation.");
+					console.log(49576326, "[raw-profiler]", "" + this.failureCounter + " feed(s) lost. Now resuming normal operation.");
 					this.failureCounter = 0;
 				}
 			}
-		}.bind(this));
-	}.bind(this));
+		});
+	});
 }
 
 DataCollectorHttpProxy.prototype.reset = function()
 {
 	//  do nothing
 }
+//#endregion
 
-//</editor-fold>
-
-//<editor-fold desc="FileLogger">
-
+//#region FileLogger
 function FileLogger(par)
 {
 	par = par || {};
-	this.logDirectory = par.logDirectory || fileLoggerDirectory;
+	this.logDirectory = par.logDirectory || FILE_LOGGER_DIRECTORY;
 	this.source = par.source || "";
 	this.maxLogSizeBytes = par.maxLogSizeBytes || 0;
 	this.maxArchiveSizeBytes = par.maxArchiveSizeBytes || 0;
@@ -1252,26 +1243,26 @@ FileLogger.prototype.logBuckets = function(currentBucketKey, buckets, configurat
 {
 	try
 	{
-		var verbosity = configuration.verbosity;
+		const verbosity = configuration.verbosity;
 
-		var logsDirectory = path.resolve(process.env.HOME, this.logDirectory, this.source);
-		var headerBucket = buckets["header"];
+		const logsDirectory = path.resolve(HOME_DIRECTORY, this.logDirectory, this.source);
+		const headerBucket = buckets["header"];
 		if(!headerBucket)
 		{
 			throw "ASSERTION FAILED: headerBucket";
 		}
-		var currentBucket = buckets[currentBucketKey];
+		const currentBucket = buckets[currentBucketKey];
 		if(!currentBucket)
 		{
 			throw "ASSERTION FAILED: currentBucket";
 		}
 
-		var snapshotFileName = currentBucketKey + ".now";
-		var snapshotFilePath = path.join(logsDirectory, snapshotFileName);
+		const snapshotFileName = currentBucketKey + ".now";
+		const snapshotFilePath = path.join(logsDirectory, snapshotFileName);
 
-		var prefix = this.maxLogSizeBytes ? this.archiveStamper + "-" : "";
-		var logFileName = prefix + currentBucketKey + ".log";
-		var logFilePath = path.join(logsDirectory, logFileName);
+		const prefix = this.maxLogSizeBytes ? this.archiveStamper + "-" : "";
+		const logFileName = prefix + currentBucketKey + ".log";
+		const logFilePath = path.join(logsDirectory, logFileName);
 
 		return async.series(
 		[
@@ -1331,15 +1322,15 @@ FileLogger.prototype._listOrphanedLogFiles = function(callback)
 {
 	try
 	{
-		var result = [];
+		const result = [];
 
 		if(!this.maxLogSizeBytes)
 		{
 			return callback(null, result);
 		}
 
-		var logsDirectory = path.resolve(process.env.HOME, this.logDirectory, this.source);
-		var prefix = this.archiveStamper + "-";
+		const logsDirectory = path.resolve(HOME_DIRECTORY, this.logDirectory, this.source);
+		const prefix = this.archiveStamper + "-";
 
 		return async.waterfall(
 		[
@@ -1351,7 +1342,7 @@ FileLogger.prototype._listOrphanedLogFiles = function(callback)
 			{
 				return async.eachSeries(entries, function(item, itemNext)
 				{
-					var fullPath = path.join(logsDirectory, item);
+					const fullPath = path.join(logsDirectory, item);
 					return fs.stat(fullPath, function(err, stats)
 					{
 						if(stats.isDirectory())
@@ -1386,7 +1377,7 @@ FileLogger.prototype._getCurrentLogFilesInfo = function(callback)
 {
 	try
 	{
-		var result =
+		const result =
 		{
 			logFiles: [],
 			totalLogSize: 0,
@@ -1397,8 +1388,8 @@ FileLogger.prototype._getCurrentLogFilesInfo = function(callback)
 			return callback(result);
 		}
 
-		var logsDirectory = path.resolve(process.env.HOME, this.logDirectory, this.source);
-		var prefix = this.archiveStamper + "-";
+		const logsDirectory = path.resolve(HOME_DIRECTORY, this.logDirectory, this.source);
+		const prefix = this.archiveStamper + "-";
 
 		return async.waterfall(
 		[
@@ -1410,14 +1401,14 @@ FileLogger.prototype._getCurrentLogFilesInfo = function(callback)
 			{
 				return async.eachSeries(entries, function(item, itemNext)
 				{
-					var fullPath = path.join(logsDirectory, item);
+					const fullPath = path.join(logsDirectory, item);
 					return fs.stat(fullPath, function(err, stats)
 					{
 						if(stats.isDirectory())
 						{
 							return itemNext();
 						}
-						var extension = path.extname(item);
+						const extension = path.extname(item);
 						if(extension != ".log" && extension != ".now")
 						{
 							return itemNext();
@@ -1447,7 +1438,7 @@ FileLogger.prototype._getArchiveFilesInfo = function(archiveDirectory, callback)
 {
 	try
 	{
-		var result =
+		const result =
 		{
 			archiveFiles: [],
 			totalArchiveSize: 0,
@@ -1468,16 +1459,17 @@ FileLogger.prototype._getArchiveFilesInfo = function(archiveDirectory, callback)
 			{
 				return async.eachSeries(entries, function(item, itemNext)
 				{
-					var fullPath = path.join(archiveDirectory, item);
+					const fullPath = path.join(archiveDirectory, item);
 					return fs.stat(fullPath, function(err, stats)
 					{
-						var fullPath = path.join(archiveDirectory, item);
-						var stats = fs.statSync(fullPath);
+						//	TODO: delete commets
+						//const fullPath = path.join(archiveDirectory, item);
+						//const stats = fs.statSync(fullPath);
 						if(stats.isDirectory())
 						{
 							return itemNext();
 						}
-						var extension = path.extname(item);
+						const extension = path.extname(item);
 						if(extension != ".zip")
 						{
 							return itemNext();
@@ -1507,20 +1499,20 @@ FileLogger.prototype._archiveLogFiles = function(logFiles, archiveName, callback
 {
 	this.archivingInProgressCount++;
 
-	var output = fs.createWriteStream(archiveName);
-	var archive = archiver('zip');
+	const output = fs.createWriteStream(archiveName);
+	const archive = archiver('zip');
 	archive.on("error", function(err)
 	{
-		console.log(6346135, "[mc-profiler]", "Error creating a profiling log archive", err);
+		console.log(6346135, "[raw-profiler]", "Error creating a profiling log archive", err);
 	});
 	output.on("close", function()
 	{
-		console.log("[mc-profiler]", "Deleting old log files... ");
-		for(var length = logFiles.length, i = 0; i < length; ++i)
+		console.log("[raw-profiler]", "Deleting old log files... ");
+		for(let length = logFiles.length, i = 0; i < length; ++i)
 		{
 			try
 			{
-				var item = logFiles[i];
+				const item = logFiles[i];
 				if(path.extname(item) == ".now")
 				{
 					continue;
@@ -1529,7 +1521,7 @@ FileLogger.prototype._archiveLogFiles = function(logFiles, archiveName, callback
 			}
 			catch(ex)
 			{
-				console.log(28376423, "[mc-profiler]", "Error deleting old profiling log file \"" + logFiles[i] + "\"", ex);
+				console.log(28376423, "[raw-profiler]", "Error deleting old profiling log file \"" + logFiles[i] + "\"", ex);
 			}
 		}
 		this.archivingInProgressCount--;
@@ -1541,16 +1533,16 @@ FileLogger.prototype._archiveLogFiles = function(logFiles, archiveName, callback
 
 	archive.pipe(output);
 
-	for(var length = logFiles.length, i = 0; i < length; ++i)
+	for(let length = logFiles.length, i = 0; i < length; ++i)
 	{
-		var item = logFiles[i];
+		const item = logFiles[i];
 		try
 		{
 			archive.append(fs.createReadStream(item), {name: path.basename(item)});
 		}
 		catch(ex)
 		{
-			console.log(83647223, "[mc-profiler]", "Error appending profiling log file \"" + logFiles[i] + "\" to archive", ex);
+			console.log(83647223, "[raw-profiler]", "Error appending profiling log file \"" + logFiles[i] + "\" to archive", ex);
 		}
 	}
 
@@ -1561,9 +1553,9 @@ FileLogger.prototype._getArchiveDirectory = function(configuration, callback)
 {
 	try
 	{
-		var logsDirectory = path.resolve(process.env.HOME, this.logDirectory, this.source);
-		var archiveDirectory = logsDirectory;
-		var archiveFullPath = configuration.archiveFullPath;
+		const logsDirectory = path.resolve(HOME_DIRECTORY, this.logDirectory, this.source);
+		const archiveDirectory = logsDirectory;
+		const archiveFullPath = configuration.archiveFullPath;
 		if(archiveFullPath)
 		{
 			try
@@ -1576,7 +1568,7 @@ FileLogger.prototype._getArchiveDirectory = function(configuration, callback)
 			}
 			catch(ex)
 			{
-				console.log(85647228, "[mc-profiler]", "Cannot access the configured archive path \"" + archiveDirectory + "\", will use the default archive directory \"" + logsDirectory + "\"", ex);
+				console.log(85647228, "[raw-profiler]", "Cannot access the configured archive path \"" + archiveDirectory + "\", will use the default archive directory \"" + logsDirectory + "\"", ex);
 				archiveDirectory = logsDirectory;
 			}
 		}
@@ -1602,7 +1594,7 @@ FileLogger.prototype._tryArchiveLogFiles = function(buckets, configuration, call
 			return callback();
 		}
 
-		var archivingFinishedCallback = function()
+		const archivingFinishedCallback = function()
 		{
 			//  no callback is intentional - we don't care when archiving ends
 			return async.waterfall(
@@ -1615,20 +1607,20 @@ FileLogger.prototype._tryArchiveLogFiles = function(buckets, configuration, call
 				{
 					if(archiveFilesInfo.totalArchiveSize >= this.maxArchiveSizeBytes)
 					{
-						console.log("[mc-profiler]", "Total archive size is now " + (Math.round(100 * archiveFilesInfo.totalArchiveSize / (1024 * 1024)) / 100) + "Mb and exceeds the maximun archive size setting: " + (Math.round(100 * this.maxArchiveSizeBytes / (1024 * 1024)) / 100) + "Mb");
-						console.log("[mc-profiler]", "Deleting oldest archive files...");
+						console.log("[raw-profiler]", "Total archive size is now " + (Math.round(100 * archiveFilesInfo.totalArchiveSize / (1024 * 1024)) / 100) + "Mb and exceeds the maximun archive size setting: " + (Math.round(100 * this.maxArchiveSizeBytes / (1024 * 1024)) / 100) + "Mb");
+						console.log("[raw-profiler]", "Deleting oldest archive files...");
 
 						archiveFilesInfo.archiveFiles.sort(function(left, right)
 						{
 							return left.mtime.getTime() - right.mtime.getTime();
 						});
 
-						var delta = archiveFilesInfo.totalArchiveSize - this.maxArchiveSizeBytes;
-						var cumulativeSize = 0;
-						var filesToRemove = [];
-						for(var length = archiveFilesInfo.archiveFiles.length, i = 0; i < length; ++i)
+						const delta = archiveFilesInfo.totalArchiveSize - this.maxArchiveSizeBytes;
+						let cumulativeSize = 0;
+						const filesToRemove = [];
+						for(let length = archiveFilesInfo.archiveFiles.length, i = 0; i < length; ++i)
 						{
-							var item = archiveFilesInfo.archiveFiles[i];
+							const item = archiveFilesInfo.archiveFiles[i];
 							cumulativeSize += item.size;
 							if(cumulativeSize >= delta)
 							{
@@ -1645,22 +1637,22 @@ FileLogger.prototype._tryArchiveLogFiles = function(buckets, configuration, call
 							}
 							catch(ex)
 							{
-								console.log(28376423, "[mc-profiler]", "Error deleting old archive file \"" + item + "\"", ex);
+								console.log(28376423, "[raw-profiler]", "Error deleting old archive file \"" + item + "\"", ex);
 								return itemNext();
 							}
 						}, next);
 					}
 
-					console.log("[mc-profiler]", "Done.");
+					console.log("[raw-profiler]", "Done.");
 				}
 			], function(err)
 			{
-				console.log(28376423, "[mc-profiler]", err, err.stack);
+				console.log(28376423, "[raw-profiler]", err, err.stack);
 			});
 		}.bind(this);
 
 		this.archivingInProgressCount++;
-		var archiveDirectory;
+		let archiveDirectory;
 		return async.waterfall(
 		[
 			function(next)
@@ -1676,10 +1668,10 @@ FileLogger.prototype._tryArchiveLogFiles = function(buckets, configuration, call
 			{
 				if(orphanedLogList.length)
 				{
-					var orphanedStamper = lpad(new Date().getTime(), 14, '0');
-					var orphanedArchiveName = path.join(archiveDirectory, orphanedStamper + "-orphaned.zip");
+					const orphanedStamper = lpad(new Date().getTime(), 14, '0');
+					const orphanedArchiveName = path.join(archiveDirectory, orphanedStamper + "-orphaned.zip");
 
-					console.log("[mc-profiler]", "Archiving orphaned files to \"" + orphanedArchiveName + "\"...");
+					console.log("[raw-profiler]", "Archiving orphaned files to \"" + orphanedArchiveName + "\"...");
 
 					//  intentionally forking the waterfall, there is no need to wait for the zip-process to finish
 					this._archiveLogFiles(orphanedLogList, orphanedArchiveName, archivingFinishedCallback);
@@ -1694,9 +1686,9 @@ FileLogger.prototype._tryArchiveLogFiles = function(buckets, configuration, call
 			{
 				if(currentLogInfo.totalLogSize >= this.maxLogSizeBytes)
 				{
-					var archiveName = path.join(archiveDirectory, this.archiveStamper + ".zip");
+					const archiveName = path.join(archiveDirectory, this.archiveStamper + ".zip");
 
-					console.log("[mc-profiler]", "Archiving a total of " + (Math.round(100 * currentLogInfo.totalLogSize / (1024 * 1024)) / 100) + "Mb of log files to \"" + archiveName + "\"...");
+					console.log("[raw-profiler]", "Archiving a total of " + (Math.round(100 * currentLogInfo.totalLogSize / (1024 * 1024)) / 100) + "Mb of log files to \"" + archiveName + "\"...");
 
 					//  from this point on the code will become asynchroneous, so we change the this.archiveStamper in order to redirect new logs to new files,
 					//  while the old log files are being compressed, archived and eventually deleted
@@ -1718,11 +1710,9 @@ FileLogger.prototype._tryArchiveLogFiles = function(buckets, configuration, call
 		return callback(new Error(ex));
 	}
 }
+//#endregion
 
-//</editor-fold>
-
-//<editor-fold desc="Utilities: hrtime">
-
+//#region Utilities: hrtime
 function _hrtimeToNs(hrtime)
 {
 	return hrtime[0] * 1000000000 + hrtime[1];
@@ -1730,25 +1720,23 @@ function _hrtimeToNs(hrtime)
 
 function _nsToHrtime(ns)
 {
-	var seconds = Math.floor(ns / 1000000000);
-	var nanoseconds = ns - seconds * 1000000000;
+	const seconds = Math.floor(ns / 1000000000);
+	const nanoseconds = ns - seconds * 1000000000;
 	return [seconds, nanoseconds];
 }
+//#endregion
 
-//</editor-fold>
-
-//<editor-fold desc="Utilities: text formatting">
-
+//#region Utilities: text formatting
 function rep(count, character)
 {
-	var sb = new Array(count + 1);
+	const sb = new Array(count + 1);
 	return sb.join(character);
 }
 
 function rpad(text, count, character)
 {
 	text = String(text);
-	var sb = [];
+	const sb = [];
 	sb.push(text);
 	if(count > text.length) sb.push(rep(count - text.length, character));
 	return sb.join("");
@@ -1757,7 +1745,7 @@ function rpad(text, count, character)
 function lpad(text, count, character)
 {
 	text = String(text);
-	var sb = [];
+	const sb = [];
 	if(count > text.length) sb.push(rep(count - text.length, character));
 	sb.push(text);
 	return sb.join("");
@@ -1765,7 +1753,7 @@ function lpad(text, count, character)
 
 function elpad(text, count)
 {
-	var ellipses = "...";
+	const ellipses = "...";
 	if(count == text.length) return text;
 	if(count < text.length)
 	{
@@ -1776,7 +1764,7 @@ function elpad(text, count)
 
 function erpad(text, count)
 {
-	var ellipses = "...";
+	const ellipses = "...";
 	if(count == text.length) return text;
 	if(count < text.length)
 	{
@@ -1792,7 +1780,7 @@ function fdate(date)
 		return elpad(date, 30);
 	}
 
-	var sb = [];
+	const sb = [];
 	sb.push(date.getFullYear());
 	sb.push("-");
 	sb.push(lpad(date.getMonth() + 1, 2, '0'));
@@ -1807,10 +1795,10 @@ function fdate(date)
 	sb.push(".");
 	sb.push(lpad(date.getMilliseconds(), 3, '0'));
 
-	var tz = Math.abs(date.getTimezoneOffset());
-	var tzSign = date.getTimezoneOffset() < 0 ? "+" : "-";
-	var tzHours = lpad(tz / 60, 2, '0');
-	var tzMinutes = lpad(tz % 60, 2, '0');
+	const tz = Math.abs(date.getTimezoneOffset());
+	const tzSign = date.getTimezoneOffset() < 0 ? "+" : "-";
+	const tzHours = lpad(tz / 60, 2, '0');
+	const tzMinutes = lpad(tz % 60, 2, '0');
 	sb.push(" ");
 	sb.push(tzSign);
 	sb.push(tzHours);
@@ -1822,10 +1810,10 @@ function fdate(date)
 
 function fduration(ms)
 {
-	var now = new Date();
-	var timezoneOffsetMs = now.getTimezoneOffset() * 60 * 1000;
-	var dateTime = new Date(ms + timezoneOffsetMs);
-	var parts =
+	const now = new Date();
+	const timezoneOffsetMs = now.getTimezoneOffset() * 60 * 1000;
+	const dateTime = new Date(ms + timezoneOffsetMs);
+	const parts =
 	[
 		{postfix: " years ", value: dateTime.getFullYear() - 1970, padding: 4},
 		{postfix: " months ", value: dateTime.getMonth(), padding: 2},
@@ -1836,13 +1824,13 @@ function fduration(ms)
 		{postfix: "ms", value: dateTime.getMilliseconds(), padding: 3},
 	];
 
-	var sb = [];
+	const sb = [];
 
-	var include = false;
-	var includedPartCount = 0;
-	for(var length = parts.length, i = 0; i < length; ++i)
+	let include = false;
+	let includedPartCount = 0;
+	for(let length = parts.length, i = 0; i < length; ++i)
 	{
-		var part = parts[i];
+		const part = parts[i];
 		if(!part.value && !include)
 		{
 			continue;
@@ -1870,11 +1858,9 @@ function fduration(ms)
 
 	return sb.join("");
 }
+//#endregion
 
-//</editor-fold>
-
-//<editor-fold desc="Interface">
-
+//#region Interface
 function _pfbegin(bucket, key, title)
 {
 	try
@@ -1888,7 +1874,7 @@ function _pfbegin(bucket, key, title)
 	}
 	catch(ex)
 	{
-		console.log(3456348756, "[mc-profiler]", "Uncaught exception, please report to mc-profiler vendor", ex, ex.stack);
+		console.log(3456348756, "[raw-profiler]", "Uncaught exception, please report to raw-profiler vendor", ex, ex.stack);
 		return null;
 	}
 }
@@ -1906,7 +1892,7 @@ function _pfend(hit, lastMessage)
 	}
 	catch(ex)
 	{
-		console.log(3456348757, "[mc-profiler]", "Uncaught exception, please report to mc-profiler vendor", ex, ex.stack);
+		console.log(3456348757, "[raw-profiler]", "Uncaught exception, please report to raw-profiler vendor", ex, ex.stack);
 	}
 }
 
@@ -1918,7 +1904,7 @@ function _pfconfig(config)
 	}
 	catch(ex)
 	{
-		console.log(3456348758, "[mc-profiler]", "Uncaught exception, please report to mc-profiler vendor", ex, ex.stack);
+		console.log(3456348758, "[raw-profiler]", "Uncaught exception, please report to raw-profiler vendor", ex, ex.stack);
 	}
 }
 
@@ -1926,7 +1912,7 @@ function _isEnabled(bucketKey)
 {
 	try
 	{
-		var commandFileFullPath = path.join(process.env.HOME, commandFileName);
+		const commandFileFullPath = path.join(HOME_DIRECTORY, COMMAND_FILE_NAME);
 
 		try
 		{
@@ -1944,7 +1930,7 @@ function _isEnabled(bucketKey)
 	}
 	catch(ex)
 	{
-		console.log(3456348759, "[mc-profiler]", "Uncaught exception, please report to mc-profiler vendor", ex, ex.stack);
+		console.log(3456348759, "[raw-profiler]", "Uncaught exception, please report to raw-profiler vendor", ex, ex.stack);
 		return false;
 	}
 }
@@ -1952,7 +1938,7 @@ function _isEnabled(bucketKey)
 
 Profiler.configuration = new Configuration(
 {
-	path: path.join(process.env.HOME, configurationFileName),
+	path: path.join(HOME_DIRECTORY, configurationFileName),
 	refreshSilenceTimeoutMs: configurationRefreshSilenceTimeoutMs,
 	defaults:
 	{
@@ -1969,8 +1955,8 @@ Profiler.utility =
 	{
 		try
 		{
-			var sb = []
-			for(var key in obj)
+			const sb = []
+			for (const key in obj)
 			{
 				sb.push(key);
 			}
@@ -1978,7 +1964,7 @@ Profiler.utility =
 		}
 		catch(ex)
 		{
-			console.log(3456348760, "[mc-profiler]", "Uncaught exception, please report to mc-profiler vendor", ex, ex.stack);
+			console.log(3456348760, "[raw-profiler]", "Uncaught exception, please report to raw-profiler vendor", ex, ex.stack);
 			return "";
 		}
 	},
@@ -1999,11 +1985,11 @@ Profiler.utility =
 
 			function _resolvePropertyPath(obj, pathText)
 			{
-				var parent = null;
-				var key = null;
-				var value = null;
-				var path = pathText.split(".");
-				for(var length = path.length, i = 0; i < length; ++i)
+				let parent = null;
+				let key = null;
+				let value = null;
+				const path = pathText.split(".");
+				for(let length = path.length, i = 0; i < length; ++i)
 				{
 					key = path[i];
 					if(!obj.hasOwnProperty(key))
@@ -2025,26 +2011,26 @@ Profiler.utility =
 				}
 			}
 
-			//var originalJson = JSON.stringify(obj);
-			var original = [];
-			for(var length = stripFieldPaths.length, i = 0; i < length; ++i)
+			//const originalJson = JSON.stringify(obj);
+			const original = [];
+			for(let length = stripFieldPaths.length, i = 0; i < length; ++i)
 			{
-				var path = stripFieldPaths[i];
-				var resolveInfo = _resolvePropertyPath(obj, path);
+				const path = stripFieldPaths[i];
+				const resolveInfo = _resolvePropertyPath(obj, path);
 				if(!resolveInfo)
 				{
 					continue;
 				}
 				original[path] = resolveInfo;
-				resolveInfo.parent[resolveInfo.key] = "(stripped by mc-profiler)";
+				resolveInfo.parent[resolveInfo.key] = "(stripped by raw-profiler)";
 			}
-			var result = JSON.stringify(obj);
-			for(var path in original)
+			const result = JSON.stringify(obj);
+			for (const path in original)
 			{
-				var resolveInfo = original[path];
+				const resolveInfo = original[path];
 				resolveInfo.parent[resolveInfo.key] = resolveInfo.value;
 			}
-			//var finalJson = JSON.stringify(obj);
+			//const finalJson = JSON.stringify(obj);
 			//if(originalJson != finalJson)
 			//{
 			//	throw "ASSERTION FAILED: originalJson == finalJson";
@@ -2053,7 +2039,7 @@ Profiler.utility =
 		}
 		catch(ex)
 		{
-			console.log(3456348761, "[mc-profiler]", "Uncaught exception, please report to mc-profiler vendor", ex, ex.stack);
+			console.log(3456348761, "[raw-profiler]", "Uncaught exception, please report to raw-profiler vendor", ex, ex.stack);
 			return "";
 		}
 	},
@@ -2067,9 +2053,9 @@ Profiler.utility =
 				return JSON.stringify(arr);
 			}
 
-			var sb = [];
+			const sb = [];
 			sb.push("[");
-			for(var length = arr.length, i = 0; i < length; ++i)
+			for(let length = arr.length, i = 0; i < length; ++i)
 			{
 				if(i != 0)
 				{
@@ -2081,7 +2067,7 @@ Profiler.utility =
 		}
 		catch(ex)
 		{
-			console.log(3456348762, "[mc-profiler]", "Uncaught exception, please report to mc-profiler vendor", ex, ex.stack);
+			console.log(3456348762, "[raw-profiler]", "Uncaught exception, please report to raw-profiler vendor", ex, ex.stack);
 			return "";
 		}
 		return sb.join("");
@@ -2092,13 +2078,13 @@ Profiler.ConsoleLogger =
 {
 	logBuckets: function consoleLogger(currentBucketKey, buckets, configuration, callback)
 	{
-		var verbosity = configuration.verbosity;
+		const verbosity = configuration.verbosity;
 
-		var headerBucket = buckets["header"];
-		var currentBucket = buckets[currentBucketKey];
+		const headerBucket = buckets["header"];
+		const currentBucket = buckets[currentBucketKey];
 
-		if(headerBucket[verbosity]) console.log("[mc-profiler]", headerBucket[verbosity]);
-		if(currentBucket[verbosity]) console.log("[mc-profiler]", currentBucket[verbosity]);
+		if(headerBucket[verbosity]) console.log(headerBucket[verbosity]);
+		if(currentBucket[verbosity]) console.log(currentBucket[verbosity]);
 
 		return callback();
 	}
@@ -2108,6 +2094,8 @@ Profiler.enums =
 {
 	EVerbosity: EVerbosity,
 };
+
+Profiler.RootPath = HOME_DIRECTORY;
 
 Profiler.FsLogger = new FileLogger();
 
@@ -2123,5 +2111,4 @@ global.__pfconfig = _pfconfig;
 global.__pfenabled = _isEnabled;
 global.__pfbegin = _pfbegin;
 global.__pfend = _pfend;
-
-//</editor-fold>
+//#endregion
