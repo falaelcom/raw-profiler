@@ -1,6 +1,6 @@
 {
     "name": "raw-profiler",
-    "version": "1.0.0",
+    "version": "0.0.1",
     "description": "A robust, heavy-duty javascript application profiler and logger for production environments.",
     "main": "index.js",
     "keywords": [

@@ -652,9 +652,9 @@ DataCollector.prototype.reset = function()
 DataCollector.prototype._tryFlushLoggingCueue = function(callback)
 {
 	return async.whilst(
-		function test(callback)
+		function test(test_callback)
 		{
-			return callback(null, this.loggingCueue.length != 0);
+			return test_callback(null, this.loggingCueue.length != 0);
 		}.bind(this),
 		function execute(next)
 		{
@@ -1894,6 +1894,7 @@ function _pfend(hit, lastMessage)
 	{
 		console.log(3456348757, "[raw-profiler]", "Uncaught exception, please report to raw-profiler vendor", ex, ex.stack);
 	}
+	return null;
 }
 
 function _pfconfig(config)
@@ -2106,9 +2107,21 @@ Profiler.createFileLogger = function(par) {return new FileLogger(par)};
 Profiler.instance = new Profiler(Profiler.configuration);
 _startCpuMonitoring();
 
-global.__pf = Profiler;
-global.__pfconfig = _pfconfig;
-global.__pfenabled = _isEnabled;
-global.__pfbegin = _pfbegin;
-global.__pfend = _pfend;
+module.exports =
+{
+	globals()
+	{
+		global.__pf = Profiler;
+		global.__pfconfig = _pfconfig;
+		global.__pfenabled = _isEnabled;
+		global.__pfbegin = _pfbegin;
+		global.__pfend = _pfend;
+	}
+};
+module.exports.__pf = Profiler;
+module.exports.__pfconfig = _pfconfig;
+module.exports.__pfenabled = _isEnabled;
+module.exports.__pfbegin = _pfbegin;
+module.exports.__pfend = _pfend;
+
 //#endregion
