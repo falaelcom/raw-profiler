@@ -1,7 +1,7 @@
 {
     "name": "raw-profiler",
-    "version": "1.0.0-alpha.1",
-    "description": "A robust, heavy-duty javascript application profiler and logger for production environments.",
+    "version": "1.0.0-alpha.2",
+    "description": "A robust, heavy-duty nodejs application profiler and logger for production environments.",
     "main": "index.js",
     "keywords": [
         "profiler",
@@ -11,6 +11,10 @@
     ],
     "author": "faleal.com",
     "license": "MIT/X Consortium License",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/falaelcom/raw-profiler.git"
+    },
     "maintainers": [
         {
             "email": "daniel@falael.com",
