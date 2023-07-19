@@ -464,7 +464,7 @@ Sample config file illustrating all possible configuration fields:
 By default all buckets are enabled, and all buckets use the default sorting column.
 
 _NOTE: The runtime configuration file (usually `~/__pfconfig`) is reloaded asynchronously on profiling hit, but no more often than once every 5 seconds (configurable via `__pfconfig({ refreshSilenceTimeoutMs: <value> })`).
-As a consequence, there is a delay between making runtime configuration changes and seeing the changes taking effect._
+As a consequence, changes are read only on the next profiling hit, and there is a delay between reading the configuration changes and the changes coming into effect._
 
 READING LOCAL PROFILING RESULTS
 ==================================================
