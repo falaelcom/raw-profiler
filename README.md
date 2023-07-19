@@ -1,10 +1,10 @@
 ABSTRACT
 ==================================================
 
-The purpose of `raw-profiler` is to enable nodejs application profiling and high-volutme logging in production environments *without* the need for downtime, external service dependencies or 
-running environment reconfiguration. To acieve this goal, `raw-profiler` offers the following facilities:
+The purpose of `raw-profiler` is to enable nodejs application profiling and high-volutme logging in production environments *without* the need for reconfiguration downtime, external 
+service dependencies or running environment reconfiguration. To acieve this goal, `raw-profiler` offers the following facilities:
 
-- API for adding profiling and logging directly into your application's code;
+- API for adding profiling and logging directly into application's code;
 - control of profiling and logging levels without restarting the running instances, from none to full;
 - remote logging for offloading the application server from computationally-intense string-concatenation and IO operations;
 - log lifecycle management, including log rotation, archiving and compression.
@@ -15,66 +15,66 @@ Consider the following before using `raw-profiler`:
 Other tools shall be used to monitor and examine the generated logs.
 
 * `raw-profiler` keeps accumulated statistical data in memory. Restarting the application (or the logging server in remote scenarios) will reset the data. Log files are
-preserved between restarts.
+persisted between restarts.
 
-* Log data is queued in memory and lazy writing is performed after a configured timeout. Exiting the application without flushing the logs could result in logging data loss 
-(NOTE: no flush function is currently implemented).
+* Log data is queued in memory and written on disk with a configurable delay. Exiting the application without flushing the logs will most likely result in logging data loss.
 
-The best way to fully understand `raw-profiler` is to experiment with it. It's recommended to start with simple console logging (default) and gradually move towards file logging 
-and remote logging. See the "Getting Started" section below.
+The best way to fully understand `raw-profiler` is to experiment with it. It's recommended to start with simple console logging (default) and gradually increase the scenario complexity
+towards file logging and remote logging. See the "Getting Started" section below.
 
-MAIN FEATURES
+FEATURES OVERVIEW
 ==================================================
 
 - **Measuring and logging of sync and async code execution times**, based on manually placed profiling API function calls.
 - **Execution statistics** collecting and logging - execution counters, min, average, max and total execution times, CPU usage during execution and various OS CPU and memory usage stats.
-- **Suitable for production environments** - enable and disable profiling **_without restarting_** the application (see below). 
-- **_Zero performance overhead_** when profiling is disabled; otherwise performance overhead is manageable via verbosity settings adjustment and remote logging.
-- **Use with heavy server loads _with no performance impact_** - easy to set up **remote logging** via HTTP.
+- **Suitable for production environments** - enable and disable profiling without restarting the application (see below). 
+- **Zero performance overhead when profiling is disabled**; otherwise performance overhead is manageable via verbosity settings adjustment and remote logging.
+- **Use with heavy server loads with no performance impact** - easy to set up remote logging via HTTP.
 - **Centralized logging** - syphon the logging and profiling feed from all your web servers towards a single logging server.
 - **Detection** and logging of never-ending profiling incidents.
-- **Monitor** the current statistics, **examine** full stats history.
+- **Monitor** the current statistics, examine full stats history.
 - **Structure** the stats into profiling buckets for easier analysis.
 - **Extensible** - provides easy ways to create custom loggers and data collector proxies.
 - **Configurable logging in-memory queue** with delayed file system writing operations, implemented as part of the default file logger.
 - **Automatic log rotation**.
 - **Automatic compression** of log files.
 - **Automatic log removal** of archive files.
-- **Easy and simple** - minimal code is required to set up and profile.
+- **Easy to use** - minimal code is required to set up and profile.
 
 GLOSSARY
 ==================================================
 
-- **Profiling hit** - a single run-time profiling incident that starts with a `__pfbegin` function call and ends with a corresponding `__pfend` function call.
+The following terminology is used to describe the profiler's set up and operation:
 
-- **Profiling hit point** - application code location where some profiling begins, marked by a `__pfbegin` function call.
+- **Profiling hit** - a single run-time profiling incident that starts with a `__pfbegin()` call and ends with a corresponding `__pfend()` call.
 
-- **Profiling key** - a key to identify the specific profiling hit, usually dynamically generated. Actual stats are collected per profiling key. 
-Profiling keys are recommended to be specific enough to reflect the intention of the code being profiled, while staying generic enough to aggregate enough data for statistics.
-As an example, under the `"CRUD"` bucket (see below), possible profiler keys could be the strings `"READ user [_id]"` or `"CREATE patient [name,email,ssn,password]"`.
-The key `"CREATE patient [name,email,ssn,password]"` will aggregate all create db ops for the `patient` collection with record schema containing the fields `name`, `email`, `ssn`, `password`,
-regardless of the specific values. An alternative key incorporating the specific values, for Ex. `"CREATE patient [John,john@email.com,0011394075,MySeCrEt1]"` would
-be argaubly used only once or twice during the whole application life time and won't provide any usable statistical data.
-Because profiling keys are dynamically generated during the application execution, their amount is set to increase during application's uptime.
+- **Profiling hit point** - a location in the application code where some profiling begins, marked by a `__pfbegin()` call.
 
-- **Profiling bucket** - a named collection of profiling keys; a single profiling bucket usually corresponds to a single profiling hit point in the code, 
-for Ex. `"CRUD"`, `"REST"`, `"RPC"`, `"VerySpecificSuspiciousLoop"`. The profiling bucket keys are predefined and hardcoded by the developer, 
-and their amount is fixed during application execution. The bucket key `"header"` is reserved and should never be used explicitly. Profiling
-buckets define the granularity unit for logging and profiling control granularity; logging and profiling can be configured and switched on/off per profiling bucket;
-log files are organized in subdirectories per profiling bucket.
+- **Profiling key** - a key to identify a specific profiling hit, usually dynamically generated when a profiling hit occurs. Stats such as min, average and max execution times
+are collected per profiling key. Profiling keys are recommended to be specific enough to reflect the intention of the code being profiled, while staying generic enough to aggregate 
+enough data for statistics. As an example, under the `"CRUD"` bucket (see below for the definition of "bucket"), possible profiler keys could be the strings `"READ user [_id]"` or 
+`"CREATE patient [name,email,ssn,password]"`. The key `"CREATE patient [name,email,ssn,password]"` will aggregate all create db ops for the `patient` collection with record schema 
+containing the fields `name`, `email`, `ssn`, `password`, regardless of the specific field values. On the other hand, a key incorporating specific field values, e.g. 
+`"CREATE patient [John,john@email.com,0011394075,MySeCrEt1]"` would be hit only once or twice during the whole application life time and won't provide any usable statistical data.
+Profiling key amount is set to increase during application's uptime.
 
-- **Profiling hit text** - this text will be printed as a part of the heading of the stats table for a single hit (give it a try to get a better idea).
-Profiling hit titles appear as log lines when profiling data printing is disabled, effectively providing a facility for pure logging without profiling.
+- **Profiling bucket** - a collection of profiling keys, which enables profiling and logging management granularity; a single profiling bucket usually corresponds to a single 
+profiling hit point or several closely related profiling hit points in the code, for Ex. `"CRUD"`, `"REST"`, `"RPC"`, `"VerySpecificSuspiciousLoop"`. A profiling bucket is identified by
+its **profiling bucket key**. Profiling bucket keys are predefined and hardcoded by the developer, and their amount is fixed during application execution. The bucket key `"header"` is 
+reserved and should never be used explicitly. Profiling buckets define the unit for logging- and profiling control granularity; logging and profiling can be configured and switched on/off 
+per profiling bucket; log files are organized in files based on profiling bucket keys.
 
-- **Profiling hit last message** - this text, which is provided at the hit's end, will be appended to the hit text.
-Profiling hit last messages appear as part of the log lines when profiling data printing is disabled, effectively providing a facility for pure logging without profiling.
+- **Profiling hit title** - printed as a part of the heading of the stats table for a single profiling hit. The profiling hit title appears as a log line when profiling data printing is 
+disabled, effectively providing a facility for pure logging without profiling.
 
-- **Local profiling** - all statistics formatting and logging is done on the application server; the time taken for formatting of statistics and logging affects
-the application pefrormance and can interfere with the profiling results in the case of nested profiling hit points.
+- **Profiling hit postfix** - provided at the end of the profiling hit; appended to the hit title. Profiling hit postfixes appear as part of the log lines when profiling data printing is 
+disabled, effectively providing a facility for pure logging without profiling.
+
+- **Local profiling** - all stats formatting and logging is done on the application server; the time required for formatting of statistics and logging affects the application pefrormance 
+and can interfere with the profiling results in case of nested profiling hit points.
 
 - **Remote profiling** - the profiler only performs measurments and simple mathematical operations on the application server, forwarding the results to a remote
-machine (the profiler data collector); all statistics formatting and logging is done on the remote server; the time taken for formatting of statistics and logging
-no more affects the application pefrormance and the profiling results are clean.
+machine (the profiler data collector); all stats formatting and logging, which imposes heavy loads on the memory and CPU, is done on the remote server.
 
 IMPORTING RAW-PROFILER INTO YOUR APPLICAITON
 ==================================================
@@ -100,29 +100,35 @@ For illustrative purposes, both import styles are used interchangeably in this d
 INTERFACE
 ==================================================
 
-* `__pfconfig({[dataCollector], ...}): void` - a `__pfconfig` call is used to change its default behavior of console logging to file logging, remote logging or custom logging, depending on the
-value provided in `dataCollector`; possible configurations are documented below in this document.
+* `__pfconfig()` - Reconfigures the default `DataCollector` for the `Profiler` single instance. See `index.js`, `function __pfconfig(par)` for code comments.
+This function never throws an exception. See below for usage examples.
 
-* `__pfenabled(bucketKey: string): boolean` - returns `true` if logging and profiling for the bucket with the specified key is enabled, otherwise returns `false`.
+* `__pfenabled()` - Gets the enabled status for the profiling bucket specified by the provided `bucketKey`. See `index.js`, `function __pfenabled(bucketKey)` for code comments.
+This function never throws an exception. See below for usage examples.
 
-* `__pfbegin(bucketKey: string, key: string, text: string): object` - starts a new profiling hit and returns a handle for that hit; the handle *must* be followed by exactly one `__pfend` 
-call for that handle to collect and log the hit's data, otherwise the hit point will be reported continuously as open (unfinished).
+* `__pfbegin()` - Creates, registers and returns a new profiling hit. See `index.js`, `function __pfbegin(bucketKey, key, title)` for code comments.
+This function never throws an exception. See below for usage examples.
 
-* `__pfend(hit, postfix: string): void` - finalizes a profiling hit by calculating the statistics and logging the result; `postfix` is appended to the `text` from the `__pfbegin`
-before printing the text.
+* `__pfend()` - Calculates profiling data and finalizes a profiling hit; initiates the logging of the collected data. See `index.js`, `function __pfend(hit, postfix)` for code comments.
+This function never throws an exception. See below for usage examples.
 
-* `__pfflush(): void` - **NOT IMPLEMENTED** - synchronously flushes the current queue guaranteeing that all log data has been written to a persistent storage.
+* `__pfflush()` - immediately initiates the process of flushing the queues to the logger. See `index.js`, `function __pfflush(callback, stopLogging = true)` for code comments.
+This function never throws an exception. See below for usage examples.
 
-* `__pf` - an object holding the current state of the profiler and several helper functions and properties:
-    - `__pf.FileLogger` - 
-    - `__pf.createFileLogger()` - 
-    - `__pf.createDataCollectorServer()` - 
-    - `__pf.createDataCollectorHttpProxy()` - 
-    - `__pf.utility.getKeysText(value)` - 
-    - `__pf.utility.stripStringify(obj, stripFieldPaths)` - 
-    - `__pf.utility.stripStringifyArray(arr, stripFieldPaths)` -
-    - `__pf.EVerbosity` - 
-	- `__pf.osResourceStats.avgCpu10sec` - OS CPU average for 10 s time window;
+* `__pf` - an object holding the current state of the profiler, helper functions and properties; see `index.js` for code comments:
+    - `__pf.EVerbosity` - the `EVerbosity: { Log: "log", Brief: "brief", Full: "full" }` enum;
+    - `__pf.FileLogger` - a preconfigured default `FileLogger` instance;
+    - `__pf.ConsoleLogger` - a preconfigured default `ConsoleLogger` instance;
+    - `__pf.DataCollector` - a preconfigured default `DataCollector` instance that uses `ConsoleLogger`;
+    - `__pf.instance` - the single instance of `Profiler`;
+    - `__pf.createFileLogger()` - creates and configures a new `FileLogger` instance;
+    - `__pf.createDataCollectorServer()` - creates and configures a new `DataCollectorServer` instance;
+    - `__pf.createDataCollectorHttpProxy()` - creates and configures a new `DataCollectorServer` instance;
+    - `__pf.utility.getKeysText(value)` - prints into a string a coma-separated list of the enumerable property names of `obj`;
+    - `__pf.utility.stripStringify(obj, stripFieldPaths)` - stringifies `obj` via `JSON.stringify` while replacing all values at the specified `stripFieldPaths` by `"(stripped by raw-profiler)"`;
+    - `__pf.utility.stripStringifyArray(arr, stripFieldPaths)` - stringifies `arr` while replacing all values at the specified `stripFieldPaths`;
+	- `__pf.osResourceStats` - a shorcut to `MachineStats.osResourceStats`;
+    - `__pf.osResourceStats.avgCpu10sec` - OS CPU average for 10 s time window;
 	- `__pf.osResourceStats.avgCpu1min` - OS CPU average for 1 min time window;
 	- `__pf.osResourceStats.avgCpu5min` - OS CPU average for 5 min time window;
 	- `__pf.osResourceStats.avgCpu15min` - OS CPU average for 15 min time window;
@@ -130,7 +136,36 @@ before printing the text.
 	- `__pf.osResourceStats.psMemUsage` - the return value of process.memoryUsage();
 	- `__pf.osResourceStats.psUptime` - the return value of process.uptime(),
 	- `__pf.osResourceStats.osUptime` - the return value of os.uptime(),
-    - `__pf.Profiler.instance` - the actual instance of the profiler,
+
+DEFAULTS
+==================================================
+
+|Category|Setting|Name|Default value|Default value meaning
+|--|--|--|--|--
+|Runtime configuration|Command file path|`commandFilePath`|`"~/__pfenable"`|-
+|Runtime configuration|Configuration file path|`configurationFilePath`|`"~/__pfconfig"`|-
+|Runtime configuration|Refresh silence timeout (in milliseconds)|`refreshSilenceTimeoutMs`|`5000`|5 sec
+|Console logger|Verbosity|`verbosity`|`EVerbosity.Full` (`"full"`)|The most verbose output level
+|File logger|Verbosity|`verbosity`|`EVerbosity.Full` (`"full"`)|The most verbose output level
+|File logger|Log path|`logPath`|`"__pflogs"`|-
+|File logger|Archive path|`archivePath`|`"__pfarchive"`|-
+|File logger|Max log size (in bytes)|`maxLogSizeBytes`|`0`|Log archiving is disabled
+|File logger|Max archive size (in bytes)|`maxArchiveSizeBytes`|`0`|Only the most recent archive file is kept
+|File logger|Log request archiving modulo|`logRequestArchivingModulo`|`25`|If enabled (max log size is larger than 0), log archiving will be attempted every 25 log requests; a log archiving attempt consists of comparing the cumulative log size to `maxLogSizeBytes` and performing archiving if comparing the cumulative log size is larger
+|File logger|Source key|`sourceKey`|`""`|-
+|Data collector|Sort column|`sortColumn`|`"maxMs"`|-
+|Data collector|Flush delay (in milliseconds)|`flushDelayMs`|`0`|No additional delay when flushing data queues
+|Data collector server|Host|`host`|`"0.0.0.0"`|Listen on all network interfaces
+|Data collector server|Port|`port`|`9666`|-
+|Data collector server, file logger|Verbosity|`verbosity`|`EVerbosity.Full` (`"full"`)|The most verbose output level
+|Data collector server, file logger|Log path|`logPath`|`"__pflogs"`|-
+|Data collector server, file logger|Archive path|`archivePath`|`"__pfarchive"`|-
+|Data collector server, file logger|Max log size (in bytes)|`maxLogSizeBytes`|`200 * 1024 * 1024`|200MB
+|Data collector server, file logger|Max archive size (in bytes)|`maxArchiveSizeBytes`|`1024 * 1024 * 1024`|1GB
+|Data collector server, file logger|Log request archiving modulo|`logRequestArchivingModulo`|`100`|If enabled (max log size is larger than 0), log archiving will be attempted every 100 log requests; a log archiving attempt consists of comparing the cumulative log size to `maxLogSizeBytes` and performing archiving if comparing the cumulative log size is larger
+|Data collector server, file logger|Source key|`sourceKey`|`""`|-
+|Data collector server, data collector|Sort column|`sortColumn`|`"maxMs"`|-
+|Data collector server, data collector|Flush delay (in milliseconds)|`flushDelayMs`|`0`|No additional delay when flushing data queues
 
 GETTING STARTED
 ==================================================
@@ -148,7 +183,7 @@ Here is a very simple NodeJS application implementing a single profiling hit poi
         }
         try
         {
-            //  although _sleep is never exptected to throw an exception, this code is provided as a template for real-world profiling scenarios and demonstrates exception logging nevertheless
+            //  although _sleep is never exptected to throw an exception, this code is provided as a template for real-world profiling scenarios and nevertheless demonstrates exception logging
             await _sleep(1000);
         }
         catch (ex)
@@ -163,11 +198,12 @@ Here is a very simple NodeJS application implementing a single profiling hit poi
     }
     test();
 
-
-HOW TO SET UP PROFILING
+COMMON CONFIGURATIONS
 ==================================================
 
-Setup for Local Console Logging
+The examples below illustrate how to configure the profiler in miscellaneous iusage scenarios. Setting up profiling hit points is not covered in this section.
+
+Configure `raw-profiler` for Local Console Logging
 --------------------------------------------
 _Appropriate for simple profiling scenarios with a single bucket._
 
@@ -175,7 +211,7 @@ In the application main file (e.g. app.js), add
 
     require("raw-profiler").global();
 
-Setup for Local Logging to the File System
+Configure `raw-profiler` for Local Logging to the File System
 --------------------------------------------
 _Appropriate for profiling scenarios with multiple buckets under lower server loads._
 
@@ -190,13 +226,13 @@ In the application main file (e.g. app.js), add
 To create a file logger with custom params, use
 
     require("raw-profiler").global();
-	__pfconfig({logger: __pf.createFileLogger(
+	__pfconfig({ logger: __pf.createFileLogger(
 	{
 		sourceKey: "MyAppInstance",
-		logDirectory: "/var/logs/raw-profiler",
+		logPath: "/var/logs/raw-profiler",
 		maxLogSizeBytes: 1024 * 1024,
 		maxArchiveSizeBytes: 200 * 1024 * 1024,
-	})});
+	}) });
 
     //  will store the profiler output in the /var/logs/raw-profiler/MyAppInstance directory
     //  the output won't be delayed but will be still written by a `setTimeout(..., 0)` callback
@@ -206,14 +242,19 @@ To create a file logger with custom params, use
     //      when the total size exceeds 200 * 1024 * 1024 bytes (200Mb), the oldest archive files will be removed so that the total archive size is less than maxArchiveSizeBytes
 
 
-Setup For Remote Logging
+Configure `raw-profiler` for Remote Logging
 --------------------------------------------
 _Appropriate for profiling scenarios with heavy server loads._
 
 In the application main file (e.g. `app.js`), add
 
     require("raw-profiler").global();
-    __pfconfig({dataCollector: __pf.createDataCollectorHttpProxy("http:127.0.0.1:9666/feed", "node1"), requestTimeoutMs: 5000});
+    __pfconfig({dataCollector: __pf.createDataCollectorHttpProxy(
+    {
+        uri: "http://127.0.0.1:9666/feed",
+        sourceKey: "node1",
+        requestTimeoutMs: 5000,
+    })});
 
     //	will proxy the stats to a remote server
     //  will timeout outgoing logging requests in 5000 ms (default is 2000 ms)
@@ -224,13 +265,17 @@ In the application main file (e.g. `app.js`), add
 To start the remote profiling data collector server, create a new `app.js` file, like this
 
     require("raw-profiler").global();
-    __pf.createDataCollectorServer({host: "<ip/host to listen on>", port: 9666, flushDelayMs: 300}).run();  //  adjust the port and flushDelayMs values by your preference
+    __pf.createDataCollectorServer({host: "0.0.0.0", port: 9666, dataCollector: { flushDelayMs: 300 } }).run();
 
+Configuring the logger (all file logger properties are supported along with `logPath`):
+
+    require("raw-profiler").global();
+    __pf.createDataCollectorServer({host: "0.0.0.0", port: 9666, fileLogger: { logPath: "/var/log/raw-profiler" } }).run();
 
 In order to perform custom feed source detection, run the remote profiling data collector server like this
 
      require("raw-profiler").global();
-     __pf.createDataCollectorServer({host: "<ip/host to listen on>", port: 9666, flushDelayMs: 300}).run(function(req, res)  //  adjust the port and flushDelayMs values by your preference
+     __pf.createDataCollectorServer({host: "0.0.0.0", port: 9666, dataCollector: { flushDelayMs: 300 } }).run(function(req, res)
      {
         return req.headers["x-forwarded-for"] ||
             req.headers["x-real-ip"] ||
@@ -240,20 +285,16 @@ In order to perform custom feed source detection, run the remote profiling data 
      });
 
 
-You may need to run `npm install` before the server starts successfully.
-
-
 Automatic Log File Compression and Archiving with Local Profiling
 --------------------------------------------
 Intensive profling tends to generate huge logs, which could easily reach gigabytes per hour in production environments. Enabling the automatic log file compression and archiving
 mitigates this effect to some extent.
 
-
 To enable the automatic log file compression and archiving for local profiling, specify the `maxLogSizeBytes` parameter for the file logger (`0` - disabled; `> 0` - enabled). 
 In the application main file (e.g. `app.js`), add
 
     require("raw-profiler").global();
-    __pfconfig({logger: __pf.createFileLogger({maxLogSizeBytes: 1024 * 1024}), flushDelayMs: 4000});
+    __pfconfig({ logger: __pf.createFileLogger({ maxLogSizeBytes: 1024 * 1024 }), flushDelayMs: 4000 });
 
     //  will monitor the total size of all *.log files, generated by the current profiling session
     //      when the total size exceeds 1024 * 1024 bytes (1Mb), all accumulated *.log files will be moved to a zip-file
@@ -262,13 +303,13 @@ In the application main file (e.g. `app.js`), add
 The file logger may be instructed to store the raw log files in a custom directory by providing an absolute path or a path, relative to the home directory of the user who runs the app:
 
     require("raw-profiler").global();
-    __pfconfig({logger: __pf.createFileLogger({logDirectory: "/var/logs/raw-profiler", maxLogSizeBytes: 1024 * 1024}), flushDelayMs: 4000});
+    __pfconfig({ logger: __pf.createFileLogger({ logPath: "/var/logs/raw-profiler", maxLogSizeBytes: 1024 * 1024 }), flushDelayMs: 4000 });
 
 
 The file logger is able to prevent the total archive size from exceeding a certain value (by automatically deleting oldest archive (`*.zip`) files):
 
     require("raw-profiler").global();
-    __pfconfig({logger: __pf.createFileLogger({logDirectory: "/var/logs/raw-profiler", maxLogSizeBytes: 1024 * 1024, maxArchiveSizeBytes: 10 * 1024 * 1024}), flushDelayMs: 4000});
+    __pfconfig({ logger: __pf.createFileLogger({ logPath: "/var/logs/raw-profiler", maxLogSizeBytes: 1024 * 1024, maxArchiveSizeBytes: 10 * 1024 * 1024 }), flushDelayMs: 4000 });
 
     //	will set the max uncompressed log size to 1Mb
     //	will set the max archive size to 10Mb
@@ -282,7 +323,7 @@ _See also the previous section._ The automatic log file compression and archivin
 To change the `maxLogSizeBytes` value, create the profiling data collector server `app.js` file using:
 
     require("raw-profiler").global();
-    __pf.createDataCollectorServer({host: "<ip/host to listen on>", port: 9666, flushDelayMs: 300, maxLogSizeBytes: 500 * 1024, maxArchiveSizeBytes: 10 * 1024 * 1024}).run();
+    __pf.createDataCollectorServer({ host: "0.0.0.0", port: 9666, dataCollector: { flushDelayMs: 300 }, fileLogger: { maxLogSizeBytes: 500 * 1024, maxArchiveSizeBytes: 10 * 1024 * 1024 } }).run();
 
     //	will set the max uncompressed log size to 500Kb
     //	will set the max archive size to 10Mb
@@ -292,7 +333,7 @@ The profiling data collection server may be instructed to store the raw log file
 the user who runs the app:
 
     require("raw-profiler").global();
-    __pf.createDataCollectorServer({host: "<ip/host to listen on>", port: 9666, flushDelayMs: 300, logDirectory: "/var/logs/raw-profiler"}).run();
+    __pf.createDataCollectorServer({host: "0.0.0.0", port: 9666, dataCollector: { flushDelayMs: 300 }, fileLogger: { logPath: "/var/logs/raw-profiler" } }).run();
 
     //	will use /var/logs/raw-profiler to store current log files
 
@@ -303,13 +344,14 @@ In the code, use `__pfbegin` and `__pfend` to profile
 
     let hit = __pfbegin("bucketKey1", "key1" [, "text"]);
     ... //	synchronous or asynchronous code
-    hit = __pfend(hit [, " append to text"]);
+    hit = __pfend(hit [, " append to text"]);   //  __pfend always returns null; assigning null to hit helps to prevent reusing the hit's state by mistake after its lifetime has ended
 
 
-Use `if(__pfenabled()) {...  /* profiling code */ }` to prevent large portions of profiling code from executing when profiling is disabled (usually code that builds profiler keys), e.g.
+Use `if(__pfenabled("<bucketKey>")) {...  /* profiling code */ }` to prevent large portions of profiling code from executing when profiling is disabled (usually code that builds profiler 
+keys), e.g.
 
     let hit, err;
-    if(__pfenabled())
+    if(__pfenabled("CRUD"))
     {
         const sb = [];
         sb.push("READ");
@@ -327,24 +369,23 @@ Use `if(__pfenabled()) {...  /* profiling code */ }` to prevent large portions o
     }
     if(__pfenabled())
     {
-        hit = __pfend(hit, err ? "; error=" + err : "");
+        hit = __pfend(hit, err ? "; error=" + err : "");   //  __pfend always returns null; assigning null to hit helps to prevent reusing the hit's state by mistake after its lifetime has ended
     }
 
-Use `if(__pfenabled("<bucketKey>"))` to check if a specific bucket is enabled.
+Don't put the `__pfend` call in a `finally` block unless you're sure that `__pfflush` will executed before the application exits due to an unhandled exception.
 
-
-To aid building schema-specific profiling keys for `_pfbegin`, use
+To aid building schema-specific profiling keys for `__pfbegin`, use
 
 	const keysText = __pf.utility.getKeysText(data);   //	if data == {a: 1, b: {c: 1}}, keysText will be "a,b"
 
 
 `keysText` can be appended to profiling keys to add schema specificity, for Ex., when profiling CRUD operations, one could build the profiling key by combining the 
-_db operation type_ (read, insert...), the _db collection name_ and a `keysText` based on the query, e.g.:
+_db operation type_ (read, insert...), the _db collection name_ and the result of a `getKeysText`, e.g.:
 
     "READ calendar_event [event_type,user]"
 
 
-`_pfbegin` may be used also for logging. To strip sensitive data from a javascript object you would like to append to the log, you can use `__pf.utility.stripStringify(obj, stripFieldNames)`:
+`__pfbegin` may be used also for logging. To strip sensitive data from a javascript object you would like to append to the log, you can use `__pf.utility.stripStringify(obj, stripFieldNames)`:
 
 	__pf.utility.stripStringify(data, ["password", "deletedObject.password"]);
 
@@ -366,35 +407,47 @@ The profiler's runtime preferences are loaded from the `~/__pfconfig` file. To e
 	nano ~/__pfconfig
 
 
-Sample config file:
+Sample config file illustrating all possible configuration fields:
 
 	{
-		"sortColumn": "totalMs",
-		"archivePath": "/media/archive",
-		"verbosity": "brief",
+		"sortColumn": "totalMs",                    //  the default sorting column for all profiling buckets; can be overridden per profiling bucket; only used with a DataCollector data collector
+        "logger":
+        {
+		    "verbosity": "brief",
+            "logPath": "/var/logs/node1",           //  only used with a FileLogger
+		    "archivePath": "/media/archive",        //  only used with a FileLogger
+		    "maxLogSizeBytes": 10000000,            //  only used with a FileLogger
+		    "maxArchiveSizeBytes": 1000000000,      //  only used with a FileLogger
+		    "logRequestArchivingModulo": 100,       //  only used with a FileLogger
+        },
+        "proxy":                                    //  only used with a DataCollectorHttpProxy data collector
+        {
+            "uri": "http://127.0.0.1:9666/feed",
+            "sourceKey": "node1",
+            "requestTimeoutMs": 5000,
+            "failureTimeoutMs": 60000,
+        },
 		"buckets":
 		{
 			"myBucket":
 			{
-				"enabled": false,
+				"enabled": false,                   //  used by both DataCollector and DataCollectorHttpProxy data collector; with DataCollectorHttpProxy (remote logging), allows for disabling profiling buckets also locally at the node application
+				"sortColumn": "total",              //  only used with a DataCollector data collector
 			},
 			"myBucket2":
 			{
-				"sortColumn": "total",
+				"sortColumn": "total",              //  only used with a DataCollector data collector
 			}
 		}
 	}
 
-
-The following configuration fields are supported both as global configuration at config json's root and for separate buckets:
-
-- `sortColumn` - specifies the key of the stats table column to perform sorting on. `sortColumn` must be a name of a numeric data column, one of the following:
+`sortColumn` possible values (see **STATS TABLE COLUMNS** below fo details):
 
         count
         discrepancy
         minMs
         avgMs
-        maxMs -> default
+        maxMs (default)
         totalSec
         totalMs
         avgCpu
@@ -402,47 +455,29 @@ The following configuration fields are supported both as global configuration at
         avgAvgOsCpu
         maxAvgOsCpu
 
-- `archivePath` - points to the directory where the log archive zip-files will be stored. When the field is not specified, the zip-files are created in the same directory as the log files. 
-In order to save newly created zip-files to another location, provide as a value an absolute path or a path that is relative to the home directory of the user who runs the application.
+`verbosity` possible values:
 
-- `verbosity` - defines the level of output verbosity. The possible values are enumerated in `__pf.EVerbosity`:
-
-	- `__pf.EVerbosity.Full = "full" -> default` - will print full profiling stats for each profiling hit
-	- `__pf.EVerbosity.Brief = "brief"` - will print tables with summary and info only for the current profiling hit key
-	- `__pf.EVerbosity.Log = "log"` - won't print tables, only timestamped titles
-
-
-- `buckets` - provides control over which buckets are enabled for logging and lets you override per bucket the default sorting column preference:
-
-		"buckets":
-		{
-			"myBucket":
-			{
-				"enabled": false,
-			},
-			"myBucket2":
-			{
-				"sortColumn": "total",
-			}
-		}
+- `__pf.EVerbosity.Full = "full" -> default` - will print full profiling stats for each profiling hit
+- `__pf.EVerbosity.Brief = "brief"` - will print tables with summary and info only for the current profiling hit key
+- `__pf.EVerbosity.Log = "log"` - won't print tables, only timestamped titles
 
 By default all buckets are enabled, and all buckets use the default sorting column.
 
-_The changes in the preferences from `~/__pfconfig` will apply on the next profiling hit._
-
+_NOTE: The runtime configuration file (usually `~/__pfconfig`) is reloaded asynchronously on profiling hit, but no more often than once every 5 seconds (configurable via `__pfconfig({ refreshSilenceTimeoutMs: <value> })`).
+As a consequence, there is a delay between making runtime configuration changes and seeing the changes taking effect._
 
 READING LOCAL PROFILING RESULTS
 ==================================================
 
-- Enable profiling for the first time (works only on the application server)
+- Enable profiling for the first time (works both on the application server and the logging server)
 
 		user@appServer$ touch ~/__pfenable
 
-- Disable profiling (works only on the application server)
+- Disable profiling (works both on the application server and the logging server)
 
 		user@appServer$ mv ~/__pfenable ~/__pfenable.not
 
-- Reenable profiling (works only on the application server)
+- Reenable profiling (works both on the application server and the logging server)
 
 		user@appServer$ mv ~/__pfenable.not ~/__pfenable
 
@@ -456,8 +491,7 @@ READING LOCAL PROFILING RESULTS
 		or
 		user@appServer$ less ~/__pflogs/<timestamp>-bucketKey1.log       # with automatic log file compression and archiving
 
-
-- Change current sorting column with local profiling
+- Change current sorting column
 
 		user@appServer$ nano ~/__pfconfig
 
@@ -477,10 +511,9 @@ READING REMOTE PROFILING RESULTS
 		user@profilingServer$ less ~/__pflogs/<app-server-ip>-<source-key>/<timestamp>-bucketKey1.log       # with automatic log file compression and archiving
 
 
-- Change current sorting column with remote profiling
+- Change current sorting column
 
 		user@profilingServer$ $ nano ~/__pfconfig
-
 
 STATS TABLE COLUMNS
 ==================================================
@@ -552,12 +585,13 @@ Because of the caching, the RAM deltas reported in log files are no more precise
 
 - Adds automatic orphaned log file archiving (only if archiving is enabled) - on every profiling hit the logs directory is checked for `*.log` files with a time stamp in the name that does not match the current time stamp; all such files are moved to an archive named `<timestamp>-orphaned.zip`.
 
-- The __pf* public methods never throw exceptions (but log all exceptions to the console).
+- The __pf* public methods never throw exceptions (all exceptions are logged to the console instead).
 
 TODO
 ==================================================
 
 - Documentation
+    - Generate API reference from code comments.
 	- Better documentation structure (add separate sections for every major component)
 	- Add a "HOW TO EXTEND" documentation topic.
     - Convert the NOTES section to elaborate documentation.

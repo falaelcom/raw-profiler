@@ -13,8 +13,7 @@
 //		-- cache `hit.bucketKey + "*" + hit.key` in the hit
 //		-- get rid of all `fs.*Sync` calls; currently synch calls only affect the logging server, and the task is not of highest priority
 //		-- add parameter value validation throughout the code
-
-const path = require("path");
+//		-- provide a way to override default logging to console (e.g. `__pfconfig(console: <consoleLike_Object>)`)
 
 const { EVerbosity } = require("./lib/EVerbosity.js");
 const { Utility } = require("./lib/Utility.js");
@@ -27,8 +26,6 @@ const { MachineStats } = require("./lib/MachineStats.js");
 const { Profiler } = require("./lib/Profiler.js");
 const { DataCollectorServer } = require("./lib/DataCollectorServer.js");
 
-const HOME_DIRECTORY = process.env.HOME || process.env.USERPROFILE;	//	HOME in linux, USERPROFILE in windows
-
 //#region Interface
 const _onInfo = (source, message) => console.log("[raw-profiler]", `[${source}]`, message);
 const _onError = (source, ncode, message, ex) => console.error("[raw-profiler]", `[${source}]`, ncode, message, ex, ex.stack);
@@ -37,8 +34,8 @@ const _onConfigurationChanged = (source, key, value, oldValue) => console.log("[
 //	The `runtimeConfiguration` instance is a shared between all configuration targets.
 const runtimeConfiguration = new RuntimeConfiguration(
 {
-	commandFileFullPath: path.join(HOME_DIRECTORY, "__pfenable"),
-	configurationFileFullPath: path.join(HOME_DIRECTORY, "__pfconfig"),
+	commandFilePath: "__pfenable",
+	configurationFilePath: "__pfconfig",
 	refreshSilenceTimeoutMs: 5000,
 });
 
@@ -48,11 +45,8 @@ let defaultDataCollector = null;
 let defaultProfiler = null;
 
 //	Object: Publishes more profiling and configuration facilities beyond the `__pf*` function family.
-const _pf =
+const __pf =
 {
-	//	Field: `RootPath: string` - The default root directory for mapping of relative paths.
-	RootPath: HOME_DIRECTORY,
-
 	//	Field: `EVerbosity: object` - The `EVerbosity` enum.
 	EVerbosity,
 
@@ -80,8 +74,8 @@ const _pf =
 			fallbackConfiguration:
 			{
 				verbosity: EVerbosity.Full,
-				logFullPath: path.join(HOME_DIRECTORY, "__pflogs"),
-				archiveFullPath: path.join(HOME_DIRECTORY, "__pfarchive"),
+				logPath: "__pflogs",
+				archivePath: "__pfarchive",
 				maxLogSizeBytes: 0,				//	archiving disabled
 				maxArchiveSizeBytes: 0,			//  archive trimming disabled
 				logRequestArchivingModulo: 25,
@@ -134,10 +128,10 @@ const _pf =
 	//	```
 	//	par:
 	//	{
-	//		uri: string,				//	required
-	//		sourceKey: string,			//	required
-	//		requestTimeoutMs: uint,		//	required
-	//		failureTimeoutMs: uint,		//	optional, defaults to `15 * 1000`, i.e. 15 sec
+	//		uri: string,				//	required; will forward profiling data by sending HTTP requests to this endpoint.
+	//		sourceKey: string,			//	required; this key is used by the remote logging server as part of the log file paths allowing for multiple application servers to feed data to a single logging server
+	//		requestTimeoutMs: uint,		//	required; specifies a timeout for HTTP requests before abortion.
+	//		failureTimeoutMs: uint,		//	required; specifies the time between reporting repeated HTTP request failures.
 	//	}
 	//	```
 	//	Returns: the newly created and configured `DataCollectorHttpProxy` instance.
@@ -163,13 +157,13 @@ const _pf =
 	//	```
 	//	par:				//	optional
 	//	{
-	//		host: string,	//	optional, defaults to `"0.0.0.0"`
-	//		port: uint,		//	optional, defaults to `9666`
+	//		host: string,	//	optional, defaults to `"0.0.0.0"`; a host name or IP address to listen on, e.g. `"0.0.0.0"`.
+	//		port: uint,		//	optional, defaults to `9666`; an HTTP port to listen on, e.g. `9666`.
 	//		fileLogger:		//	optional
 	//		{
 	//			verbosity: EVerbosity,				//	optional, defaults to `EVerbosity.Full`
-	//			logFullPath: string,				//	optional, defaults to `path.join(HOME_DIRECTORY, "__pflogs")`
-	//			archiveFullPath: string,			//	optional, defaults to `path.join(HOME_DIRECTORY, "__pfarchive")`
+	//			logPath: string,					//	optional, defaults to `"__pflogs"`
+	//			archivePath: string,				//	optional, defaults to `"__pfarchive"`
 	//			maxLogSizeBytes: uint,				//	optional, defaults to `200 * 1024 * 1024` (200MB); use `0` to disable log archiving
 	//			maxArchiveSizeBytes: uint,			//	optional, defaults to `1024 * 1024 * 1024` (1GB); use `0` to disable archive collection trimming
 	//			logRequestArchivingModulo: uint,	//	optional, defaults to `100`; use `0` to disable log archiving
@@ -184,6 +178,8 @@ const _pf =
 	//	Returns: the newly created and configured `DataCollectorServer` instance.
 	createDataCollectorServer: function (par)
 	{
+		par = par || {};
+
 		const result = new DataCollectorServer(
 		{
 			host: par.host || "0.0.0.0",
@@ -197,10 +193,10 @@ const _pf =
 					{
 						verbosity: (par.fileLogger && par.fileLogger.verbosity)
 							|| EVerbosity.Full,
-						logFullPath: (par.fileLogger && par.fileLogger.logFullPath)
-							|| path.join(HOME_DIRECTORY, "__pflogs"),
-						archiveFullPath: (par.fileLogger && par.fileLogger.archiveFullPath)
-							|| path.join(HOME_DIRECTORY, "__pfarchive"),
+						logPath: (par.fileLogger && par.fileLogger.logPath)
+							|| "__pflogs",
+						archivePath: (par.fileLogger && par.fileLogger.archivePath)
+							|| "__pfarchive",
 						maxLogSizeBytes: (par.fileLogger && !isNaN(par.fileLogger.maxLogSizeBytes))
 							? par.fileLogger.maxLogSizeBytes : 200 * 1024 * 1024, //  200MB
 						maxArchiveSizeBytes: (par.fileLogger && !isNaN(par.fileLogger.maxArchiveSizeBytes))
@@ -241,29 +237,32 @@ const _pf =
 	//	par:				//	optional
 	//	{
 	//		verbosity: EVerbosity,				//	optional, defaults to `EVerbosity.Full`
-	//		logFullPath: string,				//	optional, defaults to `path.join(HOME_DIRECTORY, "__pflogs")`
-	//		archiveFullPath: string,			//	optional, defaults to `path.join(HOME_DIRECTORY, "__pfarchive")`
+	//		logPath: string,					//	optional, defaults to `"__pflogs"`
+	//		archivePath: string,				//	optional, defaults to `"__pfarchive"`
 	//		maxLogSizeBytes: uint,				//	optional, defaults to `0` (disabled); use `0` to disable log archiving
 	//		maxArchiveSizeBytes: uint,			//	optional, defaults to `0` (disabled); use `0` to disable archive collection trimming
-	//		logRequestArchivingModulo: uint,	//	optional, defaults to `100`
+	//		logRequestArchivingModulo: uint,	//	optional, defaults to `25`
+	//		sourceKey: string,					//	optional, defaults to `""`
 	//	}
 	//	```
 	//	Returns: the newly created and configured `FileLogger` instance.
 	createFileLogger: function (par)
 	{
+		par = par || {};
+
 		const result = new FileLogger(
 		{
 			runtimeConfiguration,
 			fallbackConfiguration:
 			{
 				verbosity: par.verbosity || EVerbosity.Full,
-				logFullPath: par.logFullPath || path.join(HOME_DIRECTORY, "__pflogs"),
-				archiveFullPath: par.archiveFullPath || path.join(HOME_DIRECTORY, "__pfarchive"),
+				logPath: par.logPath || "__pflogs",
+				archivePath: par.archivePath || "__pfarchive",
 				maxLogSizeBytes: !isNaN(par.maxLogSizeBytes) ? par.maxLogSizeBytes : 0,
 				maxArchiveSizeBytes: !isNaN(par.maxArchiveSizeBytes) ? par.maxArchiveSizeBytes : 0,
 				logRequestArchivingModulo: !isNaN(par.logRequestArchivingModulo) ? par.maxArchiveSizeBytes : 25,
 			},
-			sourceKey: "",
+			sourceKey: par.sourceKey,
 		});
 		result.on("info", (...args) => _onInfo("default-file-logger", ...args));
 		result.on("error", (...args) => _onError("default-file-logger", ...args));
@@ -274,7 +273,7 @@ const _pf =
 	//	Object: A collection of utility functions to aid the building of profiling hit point keys.
 	utility:
 	{
-		//	Function: `getKeysText(obj: object): string` - prints a coma-separated list of the enumerable property names of `obj`.
+		//	Function: `getKeysText(obj: object): string` - prints into a string a coma-separated list of the enumerable property names of `obj`.
 		//	Parameter: `obj: object` - the input object to format.
 		//	Returns: a coma-separated list of the enumerable property names of `obj`, e.g. `{a:1, b:"B", c:true}` will produce `"a,b,c"`.
 		//	Remarks: This function effectively serializes the top-level of the object schema. Used when building profile hit keys.
@@ -336,31 +335,41 @@ const _pf =
 	},
 };
 
-
-//	Function: Reconfigures the default `DataCollector` for the `Profiler` single instance.
+//	Function: `__pfconfig(par: object): void` - Reconfigures the default `DataCollector` for the `Profiler` single instance.
 //	Parameter: `par: object` - required.
 //	Parameter: `par.dataCollector: DataCollector` - optional; if set, the data collector for the `Profiler` single instance is replaced with `par.dataCollector` and all other `par` 
 //		fields are ignored.
-//	Parameter: `par.fallbackConfiguration: object` - optional
-//	Parameter: `par.fallbackConfiguration.sortColumn: string` - optional, defaults to `"maxMs"`; an initial and default value for the default `sortColumn` setting.
+//	Parameter: `par.sortColumn: string` - optional, defaults to `"maxMs"`; an initial and default value for the default `sortColumn` setting.
 //	Parameter: `par.logger: ConsoleLogger | FileLogger | { logBuckets: function }` - optional, defaults to `ConsoleLogger`; a new `DataCollector` will be created with the provided logger;
 //		`DataCollector` will invoke `this.logger.logBuckets()` every time it's ready to flush collected data; see the implementation of `ConsoleLogger` and `FileLogger` for 
 //		details on implementing custom loggers.
 //	Parameter: `par.flushDelayMs: uint` - optional, defaults to `0`; a new `DataCollector` will be created with the provided `flushDelayMs`; used as a parameter for 
 //		a `setTimeout` before flushing the queues.
+//	Parameter: `par.commandFilePath: string` - optional, defaults to `"__pfenable)`; the path to the runtime command file for `raw-profiler`, 
+//		e.g. `/home/user/__pfenable`; the existance of the command file determines the enabled state of the `raw-profiler`; if there is no such file, the `raw-profiler` 
+//		functionality is completely disabled except for testing for the command file existence.
+//	Parameter: `par.configurationFilePath: string` - optional, defaults to `"__pfconfig"`; the path to the runtime configuration file for `raw-profiler`, 
+//		e.g. `/home/user/__pfconfig`.
+//	Parameter: `par.refreshSilenceTimeoutMs: uint` - optional, defaults to `5000`; run-time configuration refresh-from-file attempts will be performed no more frequently than
+//		once every `refreshSilenceTimeoutMs` milliseconds.
+//	Parameter: `par.initialEnabled: boolean` - defaults to `true`; provides an initial value for the profiler enabled state before the command file has been queried for the first time.
 //	Remarks: 
 //		This function never throws an exception.
 function __pfconfig(par)
 {
 	try
 	{
-		if (par.dataCollector) return _pf.instance.setDataCollector(par.dataCollector);
+		if (par.commandFilePath !== void 0 && par.commandFilePath !== null) runtimeConfiguration.commandFilePath = par.commandFilePath;
+		if (par.configurationFilePath !== void 0 && par.configurationFilePath !== null) runtimeConfiguration.configurationFilePath = par.configurationFilePath;
+		if (par.refreshSilenceTimeoutMs !== void 0 && par.refreshSilenceTimeoutMs !== null) runtimeConfiguration.refreshSilenceTimeoutMs = par.refreshSilenceTimeoutMs;
+
+		if (par.dataCollector) return __pf.instance.setDataCollector(par.dataCollector);
 
 		const arg = {};
 		arg.runtimeConfiguration = runtimeConfiguration;
 		arg.fallbackConfiguration = {};
-		arg.fallbackConfiguration.sortColumn = (par.fallbackConfiguration && par.fallbackConfiguration.sortColumn) ? par.fallbackConfiguration.sortColumn : "maxMs";
-		arg.logger = par.logger || _pf.ConsoleLogger;
+		arg.fallbackConfiguration.sortColumn = (par && par.sortColumn) ? par.sortColumn : "maxMs";
+		arg.logger = par.logger || __pf.ConsoleLogger;
 		arg.flushDelayMs = par.flushDelayMs !== void 0 ? par.flushDelayMs : 0;
 
 		const dataCollector = new DataCollector(arg);
@@ -369,12 +378,12 @@ function __pfconfig(par)
 
 		if (defaultProfiler)
 		{
-			if (_pf.instance.dataCollector)
+			if (__pf.instance.dataCollector)
 			{
-				_pf.instance.dataCollector.removeAllListeners("error");
-				_pf.instance.dataCollector.removeAllListeners("configurationChanged");
+				__pf.instance.dataCollector.removeAllListeners("error");
+				__pf.instance.dataCollector.removeAllListeners("configurationChanged");
 			}
-			_pf.instance.setDataCollector(dataCollector);
+			__pf.instance.setDataCollector(dataCollector);
 		}
 		else defaultProfiler = new Profiler(dataCollector);
 	}
@@ -393,7 +402,7 @@ function __pfconfig(par)
 //		This function never throws an exception.
 function __pfenabled(bucketKey)
 {
-	return _pf.instance.isEnabled(bucketKey);
+	return __pf.instance.isEnabled(bucketKey);
 }
 
 //	Function: `__pfbegin(bucketKey: string, key: string, text: string): object` - creates, registers and returns a new profiling hit.
@@ -410,7 +419,7 @@ function __pfenabled(bucketKey)
 //		Always use `Utility.stripStringify` before logging objects via `title` to ensure that no sensitive data such as unencrypted passwords will appear in the logs.
 function __pfbegin(bucketKey, key, title)
 {
-	return _pf.instance.begin(bucketKey, key, title);
+	return __pf.instance.begin(bucketKey, key, title);
 }
 
 //	Function: `__pfend(hit: object, postfix: string): null` - calculates profiling data and finalizes a profiling `hit`; initiates the logging of the collected data.
@@ -427,10 +436,10 @@ function __pfbegin(bucketKey, key, title)
 //		Always use `Utility.stripStringify` before logging objects via `title` to ensure that no sensitive data such as unencrypted passwords will appear in the logs.
 function __pfend(hit, postfix)
 {
-	return _pf.instance.end(hit, postfix);
+	return __pf.instance.end(hit, postfix);
 }
 
-//	Function: `__pfflush(callback(err: object): void, stopLogging: boolean): void` - called after all log queues have been flushed.
+//	Function: `__pfflush(callback(err: object): void, stopLogging: boolean): void` - immediately initiates the process of flushing the queues to the logger.
 //	Parameter: `callback(err): void` - required; a callback that is called when flushing finishes.
 //	Parameter: `stopLogging: boolean` - optional, defaults to `true`; if set to true, the current data collector immediately starts ignoring any new data ensuring that there won't be new entries
 //		enqueued. There's no way to resume enqueueing.
@@ -439,7 +448,7 @@ function __pfend(hit, postfix)
 //		This function never throws an exception.
 function __pfflush(callback, stopLogging = true)
 {
-	return _pf.instance.flush(callback, stopLogging);
+	return __pf.instance.flush(callback, stopLogging);
 }
 
 MachineStats.startCpuMonitoring();
@@ -448,14 +457,14 @@ module.exports =
 {
 	globals()
 	{
-		global.__pf = _pf;
+		global.__pf = __pf;
 		global.__pfconfig = __pfconfig;
 		global.__pfenabled = __pfenabled;
 		global.__pfbegin = __pfbegin;
 		global.__pfend = __pfend;
 	}
 };
-module.exports.__pf = _pf;
+module.exports.__pf = __pf;
 module.exports.__pfconfig = __pfconfig;
 module.exports.__pfenabled = __pfenabled;
 module.exports.__pfbegin = __pfbegin;
