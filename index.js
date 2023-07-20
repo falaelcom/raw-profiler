@@ -139,10 +139,14 @@ const __pf =
 	{
 		const result = new DataCollectorHttpProxy(
 		{
-			uri: par.uri,
-			sourceKey: par.sourceKey,
-			requestTimeoutMs: par.requestTimeoutMs,
-			failureTimeoutMs: par.failureTimeoutMs,
+			runtimeConfiguration,
+			fallbackConfiguration:
+			{
+				uri: par.uri,
+				sourceKey: par.sourceKey,
+				requestTimeoutMs: par.requestTimeoutMs,
+				failureTimeoutMs: par.failureTimeoutMs,
+			},
 		});
 		result.on("info", (...args) => _onInfo("data-collector-server", ...args));
 		result.on("error", (...args) => _onError("data-collector-server", ...args));

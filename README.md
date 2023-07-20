@@ -254,6 +254,7 @@ In the application main file (e.g. `app.js`), add
         uri: "http://127.0.0.1:9666/feed",
         sourceKey: "node1",
         requestTimeoutMs: 5000,
+        failureTimeoutMs: 60000,
     })});
 
     //	will proxy the stats to a remote server
