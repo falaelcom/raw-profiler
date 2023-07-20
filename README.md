@@ -425,6 +425,102 @@ The profiler's runtime preferences are loaded from the `~/__pfconfig` file. To e
 	nano ~/__pfconfig
 
 
+CONFIGURATION REFERENCE
+==================================================
+
+__pfconfig
+---------------------------
+```
+//	Function: `__pfconfig(par: object): void` - Reconfigures the default `DataCollector` for the `Profiler` single instance.
+//	Parameter: `par: object` - required.
+//	Parameter: `par.dataCollector: DataCollector` - optional; if set, the data collector for the `Profiler` single instance is replaced with `par.dataCollector` and all other `par` 
+//		fields are ignored.
+//	Parameter: `par.sortColumn: string` - optional, defaults to `"maxMs"`; an initial and default value for the default `sortColumn` setting.
+//	Parameter: `par.logger: ConsoleLogger | FileLogger | { logBuckets: function }` - optional, defaults to `ConsoleLogger`; a new `DataCollector` will be created with the provided logger;
+//		`DataCollector` will invoke `this.logger.logBuckets()` every time it's ready to flush collected data; see the implementation of `ConsoleLogger` and `FileLogger` for 
+//		details on implementing custom loggers.
+//	Parameter: `par.flushDelayMs: uint` - optional, defaults to `0`; a new `DataCollector` will be created with the provided `flushDelayMs`; used as a parameter for 
+//		a `setTimeout` before flushing the queues.
+//	Parameter: `par.commandFilePath: string` - optional, defaults to `"__pfenable)`; the path to the runtime command file for `raw-profiler`, 
+//		e.g. `/home/user/__pfenable`; the existance of the command file determines the enabled state of the `raw-profiler`; if there is no such file, the `raw-profiler` 
+//		functionality is completely disabled except for testing for the command file existence.
+//	Parameter: `par.configurationFilePath: string` - optional, defaults to `"__pfconfig"`; the path to the runtime configuration file for `raw-profiler`, 
+//		e.g. `/home/user/__pfconfig`.
+//	Parameter: `par.refreshSilenceTimeoutMs: uint` - optional, defaults to `5000`; run-time configuration refresh-from-file attempts will be performed no more frequently than
+//		once every `refreshSilenceTimeoutMs` milliseconds.
+//	Parameter: `par.initialEnabled: boolean` - defaults to `true`; provides an initial value for the profiler enabled state before the command file has been queried for the first time.
+//	Remarks: 
+//		This function never throws an exception.
+```
+
+__pf.createDataCollectorHttpProxy
+---------------------------
+```
+	//	Function: `createDataCollectorHttpProxy(par: object): DataCollectorHttpProxy` - creates and configures a new `DataCollectorServer` instance.
+	//	Parameter:
+	//	```
+	//	par:
+	//	{
+	//		uri: string,				//	required; will forward profiling data by sending HTTP requests to this endpoint.
+	//		sourceKey: string,			//	required; this key is used by the remote logging server as part of the log file paths allowing for multiple application servers to feed data to a single logging server
+	//		requestTimeoutMs: uint,		//	required; specifies a timeout for HTTP requests before abortion.
+	//		failureTimeoutMs: uint,		//	required; specifies the time between reporting repeated HTTP request failures.
+	//	}
+	//	```
+	//	Returns: the newly created and configured `DataCollectorHttpProxy` instance.
+```
+
+__pf.createDataCollectorServer
+---------------------------
+```
+	//	Function: `createDataCollectorServer(par: void | object)` - creates and configures a new `DataCollectorServer` instance.
+	//	Parameter:
+	//	```
+	//	par:				//	optional
+	//	{
+	//		host: string,	//	optional, defaults to `"0.0.0.0"`; a host name or IP address to listen on, e.g. `"0.0.0.0"`.
+	//		port: uint,		//	optional, defaults to `9666`; an HTTP port to listen on, e.g. `9666`.
+	//		fileLogger:		//	optional
+	//		{
+	//			verbosity: EVerbosity,				//	optional, defaults to `EVerbosity.Full`
+	//			logPath: string,					//	optional, defaults to `"__pflogs"`
+	//			archivePath: string,				//	optional, defaults to `"__pfarchive"`
+	//			maxLogSizeBytes: uint,				//	optional, defaults to `200 * 1024 * 1024` (200MB); use `0` to disable log archiving
+	//			maxArchiveSizeBytes: uint,			//	optional, defaults to `1024 * 1024 * 1024` (1GB); use `0` to disable archive collection trimming
+	//			logRequestArchivingModulo: uint,	//	optional, defaults to `100`; use `0` to disable log archiving
+	//		},
+	//		dataCollector:	//	optional
+	//		{
+	//			sortColumn: stirng,					//	optional, defaults to `"maxMs"`
+	//			flushDelayMs: uint,					//	optional, defaults to `0`
+	//		}
+	//	}
+	//	```
+	//	Returns: the newly created and configured `DataCollectorServer` instance.
+```
+
+__pf.createFileLogger
+---------------------------
+```
+	//	Function: `createFileLogger(par: void | object)` - creates and configures a new `FileLogger` instance.
+	//	Parameter:
+	//	```
+	//	par:				//	optional
+	//	{
+	//		verbosity: EVerbosity,				//	optional, defaults to `EVerbosity.Full`
+	//		logPath: string,					//	optional, defaults to `"__pflogs"`
+	//		archivePath: string,				//	optional, defaults to `"__pfarchive"`
+	//		maxLogSizeBytes: uint,				//	optional, defaults to `0` (disabled); use `0` to disable log archiving
+	//		maxArchiveSizeBytes: uint,			//	optional, defaults to `0` (disabled); use `0` to disable archive collection trimming
+	//		logRequestArchivingModulo: uint,	//	optional, defaults to `25`
+	//		sourceKey: string,					//	optional, defaults to `""`
+	//	}
+	//	```
+	//	Returns: the newly created and configured `FileLogger` instance.
+```
+
+Run-time configuration
+---------------------------
 Sample config file illustrating all possible configuration fields:
 
 	{
@@ -484,23 +580,6 @@ By default all buckets are enabled, and all buckets use the default sorting colu
 _NOTE: The runtime configuration file (usually `~/__pfconfig`) is reloaded asynchronously on profiling hit, but no more often than once every 5 seconds (configurable via `__pfconfig({ refreshSilenceTimeoutMs: <value> })`).
 As a consequence, changes are read only on the next profiling hit, and there is a delay between reading the configuration changes and the changes coming into effect._
 
-CONFIGURATION REFERENCE
-==================================================
-
-```
-	//	Function: `createDataCollectorHttpProxy(par: object): DataCollectorHttpProxy` - creates and configures a new `DataCollectorServer` instance.
-	//	Parameter:
-	//	```
-	//	par:
-	//	{
-	//		uri: string,				//	required; will forward profiling data by sending HTTP requests to this endpoint.
-	//		sourceKey: string,			//	required; this key is used by the remote logging server as part of the log file paths allowing for multiple application servers to feed data to a single logging server
-	//		requestTimeoutMs: uint,		//	required; specifies a timeout for HTTP requests before abortion.
-	//		failureTimeoutMs: uint,		//	required; specifies the time between reporting repeated HTTP request failures.
-	//	}
-	//	```
-	//	Returns: the newly created and configured `DataCollectorHttpProxy` instance.
-```
 
 READING LOCAL PROFILING RESULTS
 ==================================================

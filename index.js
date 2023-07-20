@@ -7,6 +7,7 @@
 //		- there are several flags such as `isRefreshing`; if necessary, add code to make sure that no exception or error might leave such flags up forever
 //		- The CPU usage is being calculated based on OS and not node js process CPU stats(older node js versions lack a required api).Desired solution - detect node js version and enable node js process CPU stats when possible.
 //		- Add disk space and log size stats to the bucket table headers.
+//		- force __pfflush to wait for any archiving started by the file logger before invoking the callback
 //	DEBT:
 //	    -- migrate to async/await syntax
 //		-- replace all `.bind` calls with lambda functions
