@@ -11,7 +11,7 @@
 //	    -- migrate to async/await syntax
 //		-- replace all `.bind` calls with lambda functions
 //		-- cache `hit.bucketKey + "*" + hit.key` in the hit
-//		-- get rid of all `fs.*Sync` calls; currently synch calls only affect the logging server, and the task is not of highest priority
+//		-- get rid of all `fs.*Sync` calls in FileLogger; currently synch calls only affect the logging server, and the task is not of highest priority
 //		-- add parameter value validation throughout the code
 //		-- provide a way to override default logging to console (e.g. `__pfconfig(console: <consoleLike_Object>)`)
 

@@ -137,6 +137,8 @@ This function never throws an exception. See below for usage examples.
 	- `__pf.osResourceStats.psUptime` - the return value of process.uptime(),
 	- `__pf.osResourceStats.osUptime` - the return value of os.uptime(),
 
+_NOTE: When required, the `raw-profiler` module starts its own system and process resources monitoring timer with resolution 5s (non-configurable). The collected stats are used for profiling and are available at any time via `__pf.osResourceStats` as well. All values are updated every 5 seconds. Using cached values prevents the nodejs process from exhausting available file descriptors on extremely heavy server loads (every sytem/process resource check is done by reading from a /proc/* or /sys/* or /dev/* file). Because of the caching, the RAM deltas reported in log files are no more precise (the 5s update resolution is way too large for a typical profiling hit), but can be informative when profiling long-lasting processes._
+
 DEFAULTS
 ==================================================
 
@@ -241,7 +243,6 @@ To create a file logger with custom params, use
     //  will monitor the total size of all *.zip files in the archive directory
     //      when the total size exceeds 200 * 1024 * 1024 bytes (200Mb), the oldest archive files will be removed so that the total archive size is less than maxArchiveSizeBytes
 
-
 Configure `raw-profiler` for Remote Logging
 --------------------------------------------
 _Appropriate for profiling scenarios with heavy server loads._
@@ -262,6 +263,8 @@ In the application main file (e.g. `app.js`), add
     //	the remote server will append "-node1" to the name of the subdirectory that will strore the logs from this particular application instance
     //	    allowing one logging server to collect data from many application running instances
 
+
+_NOTE: The data collection proxy accept a second parameter: `sourceKey`. If `sourceKey` is set, the data collection server will append a stripped version of this string to the logging subdirectory, e.g. it will use `127.0.0.1-development` instead of the plain `127.0.0.1`._
 
 To start the remote profiling data collector server, create a new `app.js` file, like this
 
@@ -338,6 +341,20 @@ the user who runs the app:
 
     //	will use /var/logs/raw-profiler to store current log files
 
+
+Automatic Log File Compression and Archiving - Remarks
+--------------------------------------------
+
+To enable automatic log file compression and archiving, configure the file logger with `maxLogSizeBytes > 0` and `logRequestArchivingModulo > 0`. Automatic log file compression 
+and archiving changes the file logger behavior the following way:
+
+* All log files are prefixed with a 14-digit timestamp followed by a dash (e.g. `01689840005906-REST.log`).
+* The current timestamp is used as a name for the next archive zip-file as well (the name of the zip-file is the same as the timestamps of the archived log files). The zip file names can be used for sorting (zip-files with larger numbers in names are generated later).
+* Any log files prefixed by a timestamp different from the current timestamp are considered orphans and are archived in a zip file named `<timestamp>-orphaned.zip`, where `<timestamp>` is 
+generated based on the current time at the moment of archiving (the name of the zip-file is different from the timestamps of the archived orphaned log files).
+* The timestamp is generated when the file logger object is first created and is regenerated every time the currently accumulated log files are archived.
+* When the automatic log file compression and archiving is enabled, the naming of the log files changes from `~/__pflogs/[<app-server-ip>-<source-key>/]bucketKey1.log` to `~/__pflogs/[<app-server-ip>-<source-key>/]<timestamp>-bucketKey1.log`.
+* `__pf.createFileLogger` and `__pf.createDataCollectorServer` accept a `logRequestArchivingModulo` parameter. This value causes the file logger to try to archivate current log files on every `logRequestArchivingModulo`-th logging request rather than on every logging request.
 
 Placing Profiling Hit Points In Code
 --------------------------------------------
@@ -467,6 +484,24 @@ By default all buckets are enabled, and all buckets use the default sorting colu
 _NOTE: The runtime configuration file (usually `~/__pfconfig`) is reloaded asynchronously on profiling hit, but no more often than once every 5 seconds (configurable via `__pfconfig({ refreshSilenceTimeoutMs: <value> })`).
 As a consequence, changes are read only on the next profiling hit, and there is a delay between reading the configuration changes and the changes coming into effect._
 
+CONFIGURATION REFERENCE
+==================================================
+
+```
+	//	Function: `createDataCollectorHttpProxy(par: object): DataCollectorHttpProxy` - creates and configures a new `DataCollectorServer` instance.
+	//	Parameter:
+	//	```
+	//	par:
+	//	{
+	//		uri: string,				//	required; will forward profiling data by sending HTTP requests to this endpoint.
+	//		sourceKey: string,			//	required; this key is used by the remote logging server as part of the log file paths allowing for multiple application servers to feed data to a single logging server
+	//		requestTimeoutMs: uint,		//	required; specifies a timeout for HTTP requests before abortion.
+	//		failureTimeoutMs: uint,		//	required; specifies the time between reporting repeated HTTP request failures.
+	//	}
+	//	```
+	//	Returns: the newly created and configured `DataCollectorHttpProxy` instance.
+```
+
 READING LOCAL PROFILING RESULTS
 ==================================================
 
@@ -554,38 +589,15 @@ NOTES
 ==================================================
 
 - All file paths used by the profiler are relative to the home directory of the user who runs the application.
-- All functions used for profiling are synchronous (`__pfbegin`, `__pfend`, `__pfenabled`).
-- Writing logs is asynchronous (no thread blocking with IO operations).
-- Use multiple profiling buckets to split the profiler output into separate tables / files.
-- Disabling the profiler by deleting/renaming the file `~/__pfenable` will retain all profiling stats and won't delete the `*.log` and `*.now` files. Enabling the profiler will continue from where it left off.
+- All functions used for profiling (`__pfbegin`, `__pfend`, `__pfenabled`) are synchronous.
+- Writing logs and sending logs to a remote logging server are asynchronous operations.
+- Disabling the profiler by deleting/renaming the file `~/__pfenable` will retain all profiling stats and won't delete the `*.log` and `*.now` files. Enabling the profiler will continue from where you left it off.
 - Enabling and disabling the profiler via `~/__pfenable` works only on the application server and not on the remote data collector server. On the remote data collector server the `~/__pfenable` file is ignored.
+    - NOTE: This behavior will change with adding the remote configuratrion feature.
 - With local profiling, the loggers use the sorting column, specified in `~/__pfconfig` on the **application** server.
 - With remote profiling, the loggers use the sorting column, specified in `~/__pfconfig` on the **remote data collector server** (in which case the app server sorting column preference is ignored).
-- Multiple applications/node instances can feed towards the same data collector server; different sources will be differentiated based on the feed source server's IP, combined with the feed source server's `sourceKey` setting.
-- When the automatic log file compression and archiving is enabled, the naming of the log files changes from `~/__pflogs/[<app-server-ip>-<source-key>/]bucketKey1.log` to `~/__pflogs/[<app-server-ip>-<source-key>/]<timestamp>-bucketKey1.log`. The timestamp is regenerated every time the current log files are moved to a zip file. The zip file names correspond to the timestamp of the archived log files and can be used for sorting (zip-files with larger numbers in names are generated later).
-- When the automatic log file compression and archiving is enabled, orphaned log files are archived automatically - hit the logs directory is periodically checked for *.log files with a time stamp in the name that does not match the current time stamp; all such files are zipped to a file named `<timestamp>-orphaned.zip` and deleted.
-- The profiler rereads the configuration file on every profiling hit but no more than once every 5 seconds.
-
-- When included, the profiler starts its own system and process resources monitoring timer with resolution 5s. The collected stats are used profiling, but are also available at any time via `__pf.osResourceStats`:
-
-	- `__pf.osResourceStats.avgCpu10sec` - OS CPU average for 10 s time window;
-	- `__pf.osResourceStats.avgCpu1min` - OS CPU average for 1 min time window;
-	- `__pf.osResourceStats.avgCpu5min` - OS CPU average for 5 min time window;
-	- `__pf.osResourceStats.avgCpu15min` - OS CPU average for 15 min time window;
-	- `__pf.osResourceStats.psCpuUsage` - {system: 0, user: 0} or the return value of process.cpuUsage(), if this method is supported;
-	- `__pf.osResourceStats.psMemUsage` - the return value of process.memoryUsage();
-	- `__pf.osResourceStats.psUptime` - the return value of process.uptime(),
-	- `__pf.osResourceStats.osUptime` - the return value of os.uptime(),
-
-All values are updated every 5 seconds. Using cached values prevents the nodejs process from exhausting available file descriptors on extremely heavy server loads (every sytem/process resource check is done by reading from a /proc/* or /sys/* or /dev/* file).
-Because of the caching, the RAM deltas reported in log files are no more precise (the 5s update resolution is way too large for a typical profiling hit), but can be informative when profiling long-lasting processes.
-
-- The data collection proxy accept a second parameter: `sourceKey`. If `sourceKey` is set, the data collection server will append a stripped version of this string to the logging subdirectory, e.g. it will use `127.0.0.1-development` instead of the plain `127.0.0.1`.
-
-- Adds a parameter `logRequestArchivingModulo` to `__pf.createFileLogger` (with default value `25`) and `__pf.createDataCollectorServer` (with default value `100`). This value causes the file logger to try to archivate current log files on every `logRequestArchivingModulo`-th logging request rather than on every logging request (previous behavior).
-
-- Adds automatic orphaned log file archiving (only if archiving is enabled) - on every profiling hit the logs directory is checked for `*.log` files with a time stamp in the name that does not match the current time stamp; all such files are moved to an archive named `<timestamp>-orphaned.zip`.
-
+- Multiple applications/node instances can feed into the same data collector server; different sources will be differentiated based on the feed source server's IP, combined with the `sourceKey` setting of the corresponding application server.
+- The profiler rereads the configuration file on every profiling hit but no more than once every 5 seconds (configurable).
 - The __pf* public methods never throw exceptions (all exceptions are logged to the console instead).
 
 TODO
@@ -593,11 +605,10 @@ TODO
 
 - Documentation
     - Generate API reference from code comments.
-	- Better documentation structure (add separate sections for every major component)
 	- Add a "HOW TO EXTEND" documentation topic.
     - Convert the NOTES section to elaborate documentation.
 - Known problems
-	- Orphaned file archives can have too recent time signatures in the names.
+	- Orphaned file archives can have too recent time signatures in the names, which breaks archive file sorting; the desired behavior would be to group orphaned log files by timestamp into multiple archives, e.g. `<orphan-timestamp>-<current-timestamp>-orphans.zip`
 
 LICENSE
 ==================================================
