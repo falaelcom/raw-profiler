@@ -452,7 +452,8 @@ function __pfschema(obj)
 	}
 	catch (ex)
 	{
-		_onError("__pfschema", 98475643, "Unexpected error.", ex) 
+		_onError("__pfschema", 98475643, "Unexpected error.", ex);
+		return "";
 	}
 }
 
