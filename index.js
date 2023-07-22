@@ -444,6 +444,18 @@ function __pfend(hit, postfix)
 	return __pf.instance.end(hit, postfix);
 }
 
+function __pfschema(obj)
+{
+	try
+	{
+		return __pf.utility.getKeysText(obj);
+	}
+	catch (ex)
+	{
+		_onError("__pfschema", 98475643, "Unexpected error.", ex) 
+	}
+}
+
 //	Function: `__pfflush(callback(err: object): void, stopLogging: boolean): void` - immediately initiates the process of flushing the queues to the logger.
 //	Parameter: `callback(err): void` - required; a callback that is called when flushing finishes.
 //	Parameter: `stopLogging: boolean` - optional, defaults to `true`; if set to true, the current data collector immediately starts ignoring any new data ensuring that there won't be new entries
@@ -467,6 +479,7 @@ module.exports =
 		global.__pfenabled = __pfenabled;
 		global.__pfbegin = __pfbegin;
 		global.__pfend = __pfend;
+		global.__pfschema = __pfschema;
 	}
 };
 module.exports.__pf = __pf;
@@ -475,4 +488,5 @@ module.exports.__pfenabled = __pfenabled;
 module.exports.__pfbegin = __pfbegin;
 module.exports.__pfend = __pfend;
 module.exports.__pfflush = __pfflush;
+module.exports.__pfschema = __pfschema;
 //#endregion

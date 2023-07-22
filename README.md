@@ -203,7 +203,7 @@ Here is a very simple NodeJS application implementing a single profiling hit poi
 COMMON CONFIGURATIONS
 ==================================================
 
-The examples below illustrate how to configure the profiler in miscellaneous iusage scenarios. Setting up profiling hit points is not covered in this section.
+The examples below illustrate how to configure the profiler in miscellaneous usage scenarios. Setting up profiling hit points is covered in next sections.
 
 Configure `raw-profiler` for Local Console Logging
 --------------------------------------------
@@ -264,7 +264,7 @@ In the application main file (e.g. `app.js`), add
     //	    allowing one logging server to collect data from many application running instances
 
 
-_NOTE: The data collection proxy accept a second parameter: `sourceKey`. If `sourceKey` is set, the data collection server will append a stripped version of this string to the logging subdirectory, e.g. it will use `127.0.0.1-development` instead of the plain `127.0.0.1`._
+_NOTE: The data collection proxy accepts a `sourceKey` parameter. If `sourceKey` is set, the data collection server will append a stripped version of this string to the logging subdirectory, e.g. it will use `127.0.0.1-development` instead of the plain `127.0.0.1`._
 
 To start the remote profiling data collector server, create a new `app.js` file, like this
 
@@ -348,12 +348,11 @@ Automatic Log File Compression and Archiving - Remarks
 To enable automatic log file compression and archiving, configure the file logger with `maxLogSizeBytes > 0` and `logRequestArchivingModulo > 0`. Automatic log file compression 
 and archiving changes the file logger behavior the following way:
 
-* All log files are prefixed with a 14-digit timestamp followed by a dash (e.g. `01689840005906-REST.log`).
+* All log files are prefixed with a 14-digit timestamp followed by a dash (e.g. `01689840005906-REST.log`), i.e. the naming of the log files changes from `~/__pflogs/[<app-server-ip>-<source-key>/]bucketKey1.log` to `~/__pflogs/[<app-server-ip>-<source-key>/]<timestamp>-bucketKey1.log`.
 * The current timestamp is used as a name for the next archive zip-file as well (the name of the zip-file is the same as the timestamps of the archived log files). The zip file names can be used for sorting (zip-files with larger numbers in names are generated later).
 * Any log files prefixed by a timestamp different from the current timestamp are considered orphans and are archived in a zip file named `<timestamp>-orphaned.zip`, where `<timestamp>` is 
 generated based on the current time at the moment of archiving (the name of the zip-file is different from the timestamps of the archived orphaned log files).
 * The timestamp is generated when the file logger object is first created and is regenerated every time the currently accumulated log files are archived.
-* When the automatic log file compression and archiving is enabled, the naming of the log files changes from `~/__pflogs/[<app-server-ip>-<source-key>/]bucketKey1.log` to `~/__pflogs/[<app-server-ip>-<source-key>/]<timestamp>-bucketKey1.log`.
 * `__pf.createFileLogger` and `__pf.createDataCollectorServer` accept a `logRequestArchivingModulo` parameter. This value causes the file logger to try to archivate current log files on every `logRequestArchivingModulo`-th logging request rather than on every logging request.
 
 Placing Profiling Hit Points In Code
@@ -379,7 +378,7 @@ keys), e.g.
     }
     try
     {
-    ...
+        //  ... code to be profiled
     }
     catch(ex)
     {
@@ -390,7 +389,7 @@ keys), e.g.
         hit = __pfend(hit, err ? "; error=" + err : "");   //  __pfend always returns null; assigning null to hit helps to prevent reusing the hit's state by mistake after its lifetime has ended
     }
 
-Don't put the `__pfend` call in a `finally` block unless you're sure that `__pfflush` will executed before the application exits due to an unhandled exception.
+Don't put the `__pfend` call in a `finally` block unless you're sure that `__pfflush` will executed before the application exits due to an unhandled exception. Otherwise the profiling hit that fires the exception won't be logged because the application will exit before data collecting queues have been flushed.
 
 To aid building schema-specific profiling keys for `__pfbegin`, use
 
@@ -697,5 +696,5 @@ MIT/X Consortium License _(see the included LICENSE file)_.
 BUG REPORTS
 ==================================================
 
-Send bug reports and suggestions to <daniel@falael.com>.
+For bug reports and suggestions use https://github.com/falaelcom/raw-profiler/issues. For direct contact with the developer send an email to <daniel@falael.com>.
 
