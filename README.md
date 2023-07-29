@@ -112,6 +112,9 @@ This function never throws an exception. See below for usage examples.
 * `__pfend()` - Calculates profiling data and finalizes a profiling hit; initiates the logging of the collected data. See `index.js`, `function __pfend(hit, postfix)` for code comments.
 This function never throws an exception. See below for usage examples.
 
+* `__pflog()` - Records log `text` under the `bucketKey` with a hardcoded profiling key `"__pflog"` and no relevant execution data. See `index.js`, `function __pflog(bucketKey, text)` for code comments.
+This function never throws an exception. See below for usage examples.
+
 * `__pfflush()` - immediately initiates the process of flushing the queues to the logger. See `index.js`, `function __pfflush(callback, stopLogging = true)` for code comments.
 This function never throws an exception. See below for usage examples.
 
@@ -181,6 +184,7 @@ Here is a very simple NodeJS application implementing a single profiling hit poi
         let hit, err;
         if (__pfenabled())
         {
+            __pflog("TEST BUCKET", "Log line text");
             hit = __pfbegin("TEST BUCKET", "User [_id, active]", "profiling hit text");
         }
         try

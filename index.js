@@ -421,10 +421,10 @@ function __pfenabled(bucketKey)
 //		see `ProfilerTarget.hit(title, hitCount, openHitsCount)` docs for details.
 //	Remarks: 
 //		This function never throws an exception.
-//		Always use `Utility.stripStringify` before logging objects via `title` to ensure that no sensitive data such as unencrypted passwords will appear in the logs.
-function __pfbegin(bucketKey, key, title)
+//		Always use `Utility.stripStringify` before logging objects via `text` to ensure that no sensitive data such as unencrypted passwords will appear in the logs.
+function __pfbegin(bucketKey, key, text)
 {
-	return __pf.instance.begin(bucketKey, key, title);
+	return __pf.instance.begin(bucketKey, key, text);
 }
 
 //	Function: `__pfend(hit: object, postfix: string): null` - calculates profiling data and finalizes a profiling `hit`; initiates the logging of the collected data.
@@ -438,10 +438,24 @@ function __pfbegin(bucketKey, key, title)
 //	```
 //	Remarks: 
 //		This function never throws an exception.
-//		Always use `Utility.stripStringify` before logging objects via `title` to ensure that no sensitive data such as unencrypted passwords will appear in the logs.
+//		Always use `Utility.stripStringify` before logging objects via `postfix` to ensure that no sensitive data such as unencrypted passwords will appear in the logs.
 function __pfend(hit, postfix)
 {
 	return __pf.instance.end(hit, postfix);
+}
+
+//	Function: `__pflog(bucketKey: string, text: string): null` - records the specified `text` under the `bucketKey` with a hardcoded profiling key `"__pflog"` and no relevant execution data.
+//	Parameter: `bucketKey: string` - a key for grouping and configuration management of profiling data at log-file level; a single profiling bucket usually corresponds to a single
+//		profiling hit point in the code, for Ex. `"CRUD"`, `"REST"`, `"RPC"`, `"VerySpecificSuspiciousLoop"`.
+//	Parameter: `text: string` - a text used as a title for profiling stats tables with `EVerbosity.Brief` and `EVerbosity.Full` and as a logging line with `EVerbosity.Log`.
+//	Returns: Always returns `null`.
+//	Remarks: 
+//		This function never throws an exception.
+//		Always use `Utility.stripStringify` before logging objects via `text` to ensure that no sensitive data such as unencrypted passwords will appear in the logs.
+//		This function is a shorthand for `__pfend(__pfbegin(bucketKey, "PFLOG", text));`
+function __pflog(bucketKey, text)
+{
+	return __pf.instance.end(__pf.instance.begin(bucketKey, "__pflog", text));
 }
 
 function __pfschema(obj)
@@ -480,6 +494,7 @@ module.exports =
 		global.__pfenabled = __pfenabled;
 		global.__pfbegin = __pfbegin;
 		global.__pfend = __pfend;
+		global.__pflog = __pflog;
 		global.__pfschema = __pfschema;
 	}
 };
@@ -488,6 +503,7 @@ module.exports.__pfconfig = __pfconfig;
 module.exports.__pfenabled = __pfenabled;
 module.exports.__pfbegin = __pfbegin;
 module.exports.__pfend = __pfend;
+module.exports.__pflog = __pflog;
 module.exports.__pfflush = __pfflush;
 module.exports.__pfschema = __pfschema;
 //#endregion
