@@ -1,22 +1,21 @@
 "use strict";
 
 //	TODO:
-//		- Provide same configuration options from code(the`__pfconfig` function call) and from file (the`__pfconfig` file JSON).
+//		- provide same initial configuration options from code (the`__pfconfig` function call) and from file (the `__pfconfig` file JSON).
+//			- design a strategy for profiling of multiple npm modules that create separate profiler instances
 //		- add remote configuration acquisition from a logging server rest point
 //		- make sure all open hits end before the profiler/bucket enabled state changes
 //		- there are several flags such as `isRefreshing`; if necessary, add code to make sure that no exception or error might leave such flags up forever
-//		- The CPU usage is being calculated based on OS and not node js process CPU stats(older node js versions lack a required api).Desired solution - detect node js version and enable node js process CPU stats when possible.
-//		- Add disk space and log size stats to the bucket table headers.
-//		- force __pfflush to wait for any archiving started by the file logger before invoking the callback
-//		- modularize metrics with cpu and ram metrics being only one possible module; allow further modules to be registered: `{ query() { return {} }, format() {} }` to enable 
-//			mongodb metrics monitoring and reporting via custom monitor module
+//		- the CPU usage is being calculated based on OS and not node js process CPU stats (older node js versions lack a required api). Desired solution - detect node js version and enable node js process CPU stats when possible.
+//		- make system stats modular; provide modules for CPU/RAM, disk space, log and archive size, mongodb server info, rabbitmq info.
+//		- force `__pfflush` to wait for any archiving started by the file logger before invoking the callback
+//		- allow user to completely override any console logging
 //	DEBT:
 //	    -- migrate to async/await syntax
 //		-- replace all `.bind` calls with lambda functions
 //		-- cache `hit.bucketKey + "*" + hit.key` in the hit
 //		-- get rid of all `fs.*Sync` calls in FileLogger; currently synch calls only affect the logging server, and the task is not of highest priority
 //		-- add parameter value validation throughout the code
-//		-- provide a way to override default logging to console (e.g. `__pfconfig(console: <consoleLike_Object>)`)
 
 const { EVerbosity } = require("./lib/EVerbosity.js");
 const { Utility } = require("./lib/Utility.js");
@@ -31,7 +30,7 @@ const { DataCollectorServer } = require("./lib/DataCollectorServer.js");
 
 //#region Interface
 const _onInfo = (source, message) => console.log("[raw-profiler]", `[${source}]`, message);
-const _onError = (source, ncode, message, ex) => console.error("[raw-profiler]", `[${source}]`, ncode, message, ex, ex.stack);
+const _onError = (source, ncode, message, ex) => console.error("[raw-profiler]", `[${source}]`, ncode, message, ex);
 const _onConfigurationChanged = (source, key, value, oldValue) => console.log("[raw-profiler]", `[${source}]`, `Runtime configuration field "${key}" changed from ${JSON.stringify(oldValue)} to ${JSON.stringify(value)}.`, "\n[raw-profiler] profiler effective config\n" + __pf.instance.printConfigurationLines());
 
 //	The `runtimeConfigurator` instance is a shared between all configuration targets.
