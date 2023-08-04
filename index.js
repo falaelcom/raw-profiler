@@ -8,6 +8,8 @@
 //		- The CPU usage is being calculated based on OS and not node js process CPU stats(older node js versions lack a required api).Desired solution - detect node js version and enable node js process CPU stats when possible.
 //		- Add disk space and log size stats to the bucket table headers.
 //		- force __pfflush to wait for any archiving started by the file logger before invoking the callback
+//		- modularize metrics with cpu and ram metrics being only one possible module; allow further modules to be registered: `{ query() { return {} }, format() {} }` to enable 
+//			mongodb metrics monitoring and reporting via custom monitor module
 //	DEBT:
 //	    -- migrate to async/await syntax
 //		-- replace all `.bind` calls with lambda functions
@@ -18,7 +20,7 @@
 
 const { EVerbosity } = require("./lib/EVerbosity.js");
 const { Utility } = require("./lib/Utility.js");
-const { RuntimeConfiguration } = require("./lib/RuntimeConfiguration.js");
+const { RuntimeConfigurator } = require("./lib/RuntimeConfigurator.js");
 const { ConsoleLogger } = require("./lib/ConsoleLogger.js"); 
 const { FileLogger } = require("./lib/FileLogger.js");
 const { DataCollector } = require("./lib/DataCollector.js");
@@ -30,10 +32,10 @@ const { DataCollectorServer } = require("./lib/DataCollectorServer.js");
 //#region Interface
 const _onInfo = (source, message) => console.log("[raw-profiler]", `[${source}]`, message);
 const _onError = (source, ncode, message, ex) => console.error("[raw-profiler]", `[${source}]`, ncode, message, ex, ex.stack);
-const _onConfigurationChanged = (source, key, value, oldValue) => console.log("[raw-profiler]", `[${source}]`, `Runtime configuration field "${key}" changed from ${JSON.stringify(oldValue)} to ${JSON.stringify(value)}.`);
+const _onConfigurationChanged = (source, key, value, oldValue) => console.log("[raw-profiler]", `[${source}]`, `Runtime configuration field "${key}" changed from ${JSON.stringify(oldValue)} to ${JSON.stringify(value)}.`, "\n[raw-profiler] profiler effective config\n" + __pf.instance.printConfigurationLines());
 
-//	The `runtimeConfiguration` instance is a shared between all configuration targets.
-const runtimeConfiguration = new RuntimeConfiguration(
+//	The `runtimeConfigurator` instance is a shared between all configuration targets.
+const runtimeConfigurator = new RuntimeConfigurator(
 {
 	commandFilePath: "__pfenable",
 	configurationFilePath: "__pfconfig",
@@ -48,14 +50,11 @@ let defaultProfiler = null;
 //	Object: Publishes more profiling and configuration facilities beyond the `__pf*` function family.
 const __pf =
 {
-	//	Field: `EVerbosity: object` - The `EVerbosity` enum.
-	EVerbosity,
-
 	//	Field: `instance: Profiler` - The single instance of `Profiler`.
 	get instance()
 	{
 		if (defaultProfiler) return defaultProfiler;
-		defaultProfiler = new Profiler(this.DataCollector);
+		defaultProfiler = new Profiler(this.DefaultDataCollector);
 		return defaultProfiler;
 	},
 
@@ -65,14 +64,14 @@ const __pf =
 		return MachineStats.osResourceStats;
 	},
 
-	//	Field: `FileLogger: FileLogger` - a preconfigured default `FileLogger` instance.
-	get FileLogger()
+	//	Field: `DefaultFileLogger: FileLogger` - a preconfigured default `FileLogger` instance.
+	get DefaultFileLogger()
 	{
 		if (defaultFileLogger) return defaultFileLogger;
 		defaultFileLogger = new FileLogger(
 		{
-			runtimeConfiguration,
-			fallbackConfiguration:
+			runtimeConfigurator,
+			runtimeInitial:
 			{
 				verbosity: EVerbosity.Full,
 				logPath: "__pflogs",
@@ -89,14 +88,14 @@ const __pf =
 		return defaultFileLogger;
 	},
 
-	//	Field: `ConsoleLogger: ConsoleLogger` - a preconfigured default `ConsoleLogger` instance.
-	get ConsoleLogger()
+	//	Field: `DefaultConsoleLogger: ConsoleLogger` - a preconfigured default `ConsoleLogger` instance.
+	get DefaultConsoleLogger()
 	{
 		if (defaultConsoleLogger) return defaultConsoleLogger;
 		defaultConsoleLogger = new ConsoleLogger(
 		{
-			runtimeConfiguration,
-			fallbackConfiguration:
+			runtimeConfigurator,
+			runtimeInitial:
 			{
 				verbosity: EVerbosity.Full,
 			}
@@ -105,56 +104,23 @@ const __pf =
 		return defaultConsoleLogger;
 	},
 
-	//	Field: `DataCollector: DataCollector` - a preconfigured default `DataCollector` instance that uses `ConsoleLogger`.
-	get DataCollector()
+	//	Field: `DefaultDataCollector: DataCollector` - a preconfigured default `DataCollector` instance that uses `ConsoleLogger`.
+	get DefaultDataCollector()
 	{
 		if (defaultDataCollector) return defaultDataCollector;
 		defaultDataCollector = new DataCollector(
 		{
-			runtimeConfiguration,
-			fallbackConfiguration:
+			runtimeConfigurator,
+			runtimeInitial:
 			{
 				sortColumn: "maxMs",
 			},
-			logger: this.ConsoleLogger,
+			logger: this.DefaultConsoleLogger,
 			flushDelayMs: 0,
 		});
 		defaultDataCollector.on("error", (...args) => _onError("default-data-collector", ...args));
 		defaultDataCollector.on("configurationChanged", (...args) => _onConfigurationChanged("default-data-collector", ...args));
 		return defaultDataCollector;
-	},
-
-	//	Function: `createDataCollectorHttpProxy(par: object): DataCollectorHttpProxy` - creates and configures a new `DataCollectorServer` instance.
-	//	Parameter:
-	//	```
-	//	par:
-	//	{
-	//		uri: string,				//	required; will forward profiling data by sending HTTP requests to this endpoint.
-	//		sourceKey: string,			//	required; this key is used by the remote logging server as part of the log file paths allowing for multiple application servers to feed data to a single logging server
-	//		requestTimeoutMs: uint,		//	required; specifies a timeout for HTTP requests before abortion.
-	//		failureTimeoutMs: uint,		//	required; specifies the time between reporting repeated HTTP request failures.
-	//	}
-	//	```
-	//	Returns: the newly created and configured `DataCollectorHttpProxy` instance.
-	createDataCollectorHttpProxy: function (par)
-	{
-		const result = new DataCollectorHttpProxy(
-		{
-			runtimeConfiguration,
-			fallbackConfiguration:
-			{
-				uri: par.uri,
-				sourceKey: par.sourceKey,
-				requestTimeoutMs: par.requestTimeoutMs,
-				failureTimeoutMs: par.failureTimeoutMs,
-			},
-		});
-		result.on("info", (...args) => _onInfo("data-collector-server", ...args));
-		result.on("error", (...args) => _onError("data-collector-server", ...args));
-		return result;
-
-		console.log("[raw-profiler]", "Feeding data to " + this.uri);
-		return new DataCollectorHttpProxy(url, sourceKey, null)
 	},
 
 	//	Function: `createDataCollectorServer(par: void | object)` - creates and configures a new `DataCollectorServer` instance.
@@ -193,8 +159,8 @@ const __pf =
 			{
 				const fileLogger = new FileLogger(
 				{
-					runtimeConfiguration,
-					fallbackConfiguration:
+					runtimeConfigurator,
+					runtimeInitial:
 					{
 						verbosity: (par.fileLogger && par.fileLogger.verbosity)
 							|| EVerbosity.Full,
@@ -217,8 +183,8 @@ const __pf =
 
 				const result = new DataCollector(
 				{
-					runtimeConfiguration,
-					fallbackConfiguration:
+					runtimeConfigurator,
+					runtimeInitial:
 					{
 						sortColumn: (par.dataCollector && par.dataCollector.sortColumn) || "maxMs",
 					},
@@ -233,45 +199,6 @@ const __pf =
 		});
 		result.on("info", (...args) => _onInfo("data-collector-server", ...args));
 		result.on("error", (...args) => _onError("data-collector-server", ...args));
-		return result;
-	},
-
-	//	Function: `createFileLogger(par: void | object)` - creates and configures a new `FileLogger` instance.
-	//	Parameter:
-	//	```
-	//	par:				//	optional
-	//	{
-	//		verbosity: EVerbosity,				//	optional, defaults to `EVerbosity.Full`
-	//		logPath: string,					//	optional, defaults to `"__pflogs"`
-	//		archivePath: string,				//	optional, defaults to `"__pfarchive"`
-	//		maxLogSizeBytes: uint,				//	optional, defaults to `0` (disabled); use `0` to disable log archiving
-	//		maxArchiveSizeBytes: uint,			//	optional, defaults to `0` (disabled); use `0` to disable archive collection trimming
-	//		logRequestArchivingModulo: uint,	//	optional, defaults to `25`
-	//		sourceKey: string,					//	optional, defaults to `""`
-	//	}
-	//	```
-	//	Returns: the newly created and configured `FileLogger` instance.
-	createFileLogger: function (par)
-	{
-		par = par || {};
-
-		const result = new FileLogger(
-		{
-			runtimeConfiguration,
-			fallbackConfiguration:
-			{
-				verbosity: par.verbosity || EVerbosity.Full,
-				logPath: par.logPath || "__pflogs",
-				archivePath: par.archivePath || "__pfarchive",
-				maxLogSizeBytes: !isNaN(par.maxLogSizeBytes) ? par.maxLogSizeBytes : 0,
-				maxArchiveSizeBytes: !isNaN(par.maxArchiveSizeBytes) ? par.maxArchiveSizeBytes : 0,
-				logRequestArchivingModulo: !isNaN(par.logRequestArchivingModulo) ? par.maxArchiveSizeBytes : 25,
-			},
-			sourceKey: par.sourceKey,
-		});
-		result.on("info", (...args) => _onInfo("default-file-logger", ...args));
-		result.on("error", (...args) => _onError("default-file-logger", ...args));
-		result.on("configurationChanged", (...args) => _onConfigurationChanged("default-file-logger", ...args));
 		return result;
 	},
 
@@ -340,61 +267,270 @@ const __pf =
 	},
 };
 
-//	Function: `__pfconfig(par: object): void` - Reconfigures the default `DataCollector` for the `Profiler` single instance.
-//	Parameter: `par: object` - required.
-//	Parameter: `par.dataCollector: DataCollector` - optional; if set, the data collector for the `Profiler` single instance is replaced with `par.dataCollector` and all other `par` 
-//		fields are ignored.
-//	Parameter: `par.sortColumn: string` - optional, defaults to `"maxMs"`; an initial and default value for the default `sortColumn` setting.
-//	Parameter: `par.logger: ConsoleLogger | FileLogger | { logBuckets: function }` - optional, defaults to `ConsoleLogger`; a new `DataCollector` will be created with the provided logger;
-//		`DataCollector` will invoke `this.logger.logBuckets()` every time it's ready to flush collected data; see the implementation of `ConsoleLogger` and `FileLogger` for 
-//		details on implementing custom loggers.
-//	Parameter: `par.flushDelayMs: uint` - optional, defaults to `0`; a new `DataCollector` will be created with the provided `flushDelayMs`; used as a parameter for 
-//		a `setTimeout` before flushing the queues.
-//	Parameter: `par.commandFilePath: string` - optional, defaults to `"__pfenable)`; the path to the runtime command file for `raw-profiler`, 
-//		e.g. `/home/user/__pfenable`; the existance of the command file determines the enabled state of the `raw-profiler`; if there is no such file, the `raw-profiler` 
-//		functionality is completely disabled except for testing for the command file existence.
-//	Parameter: `par.configurationFilePath: string` - optional, defaults to `"__pfconfig"`; the path to the runtime configuration file for `raw-profiler`, 
-//		e.g. `/home/user/__pfconfig`.
-//	Parameter: `par.refreshSilenceTimeoutMs: uint` - optional, defaults to `5000`; run-time configuration refresh-from-file attempts will be performed no more frequently than
-//		once every `refreshSilenceTimeoutMs` milliseconds.
-//	Parameter: `par.initialEnabled: boolean` - defaults to `true`; provides an initial value for the profiler enabled state before the command file has been queried for the first time.
-//	Remarks: 
-//		This function never throws an exception.
+//	Function: `__pfconfig(par: object): void` - Reconfigures the `Profiler` single instance.
+//	Parameter:
+//	```
+//		par:
+//		{
+//			commandFilePath: string,			//	optional, defaults to "__pfenable"; the path to the runtime command file for raw-profiler, e.g. /home/user/__pfenable; the existance of the command file determines the enabled state of the raw-profiler; if there is no such file, the raw-profiler functionality is completely disabled except for testing for the command file existence.
+//			configurationFilePath: string,		//	optional, defaults to "__pfconfig"; the path to the runtime configuration file for raw-profiler, e.g. /home/user/__pfconfig.
+//			refreshSilenceTimeoutMs: uint,		//	optional, defaults to 5000; run-time configuration refresh-from-file attempts will be performed no more frequently than once every refreshSilenceTimeoutMs milliseconds.
+//			initialEnabled: boolean,			//	optional, defaults to true; provides an initial value for the profiler enabled state before the command file has been queried for the first time.
+//
+//			create(className, config): object,	//	optional; if set will be called whenever a non-standard data collector or logger need to be created (see par.dataCollector.type and par.dataCollector.logger.type).
+//			dataCollector:						//	optional, if not set __pf.DefaultDataCollector is used; configuration for a new data collector instance; if the provided value has no type propery, this value is assumed to be a data collector instance.
+//			{
+//				type: string,					//	optional, defaults to "DataCollector"; the class name to instanciate a new data collector from; can be "DataCollector", "DataCollectorHttpProxy" or a custom data collector; if a custom name is provided, a `par.create` callback must be provided as well that knows how to create a data collector instance based on this name.
+//				config:							//	optional
+//				{
+//					//	with DataCollector
+//					runtimeInitial:				//	optional; DataCollector uses the values specified as properties to this object as initial configuration.
+//					{
+//						sortColumn: string,		//	optional, defaults to "maxMs"
+//						"buckets.*": ...		//	optional; a mechanism to specify initial/default values foir the buckets runtime configuration that is loaded later from `__pfconfig`.
+//					},
+//					logger:						//	optional, if not set __pf.DefaultConsoleLogger is used; configuration for a logger instance; if the provided value has no type propery, this value is assumed to be a logger instance.
+//					{
+//						type: string,			//	optional, defaults to "ConsoleLogger"; the class to instanciate a new logger from; can be "ConsoleLogger", "FileLogger" or a custom class/object implementing { logBuckets: function }; if a custom name is provided, a `par.create` callback must be provided as well that knows how to create a logger instance based on this name.
+//						config:					//	optional
+//						{
+//							//	with ConsoleLogger
+//							runtimeInitial:							//	optional; ConsoleLogger uses the values specified as properties to this object as initial configuration.
+//							{
+//								verbosity: string,					//	optional; ConsoleLogger uses the values specified as properties to this object as initial configuration.
+//							},
+//
+//							//	with FileLogger
+//							runtimeInitial:							//	optional; FileLogger uses the values specified as properties to this object as initial configuration.
+//							{
+//								verbosity: EVerbosity,				//	optional, defaults to `EVerbosity.Full`
+//								logPath: string,					//	optional, defaults to `"__pflogs"`
+//								archivePath: string,				//	optional, defaults to `"__pfarchive"`
+//								maxLogSizeBytes: uint,				//	optional, defaults to `0` (disabled); use `0` to disable log archiving
+//								maxArchiveSizeBytes: uint,			//	optional, defaults to `0` (disabled); use `0` to disable archive collection trimming
+//								logRequestArchivingModulo: uint,	//	optional, defaults to `25`
+//								sourceKey: string,					//	optional, defaults to `""`
+//							},
+//						},
+//					},
+//					flushDelayMs: uint,					//	optional, defaults to 0; used as a parameter for a setTimeout before flushing the queues.
+//
+//					//	with DataCollectorHttpProxy
+//					runtimeInitial:						//	required; DataCollectorHttpProxy uses the values specified as properties to this object as initial configuration.
+//					{
+//						uri: string,					//	required; DataCollectorHttpProxy will forward profiling data by sending HTTP requests to this endpoint until overwritten by the runtime configuration.
+//						sourceKey: string,				//	required; this key is used by the remote logging server as part of the log file paths allowing for multiple application servers to feed data to a single logging server until overwritten by the runtime configuration.
+//						requestTimeoutMs: uint,			//	required; specifies a timeout for HTTP requests before abortion until overwritten by the runtime configuration.
+//						failureTimeoutMs: uint,			//	required; specifies the time between reporting repeated HTTP request failures until overwritten by the runtime configuration.
+//						"buckets.*": ...				//	optional; a mechanism to specify initial/default values foir the buckets runtime configuration that is loaded later from `__pfconfig`.
+//					},
+//				},
+//			},
+//		}
+//	```
+//	Alternative form - `par.logger` instead of `par.dataCollector` (assumes a data collector of type "DataCollector")
+//	```
+//		par:
+//		{
+//			...
+//			logger:						//	optional, if not set __pf.DefaultConsoleLogger is used; configuration for a logger instance; if the provided value has no type propery, this value is assumed to be a logger instance
+//			{
+//				type: string,			//	optional, defaults to "ConsoleLogger"; the class to instanciate a new logger from; can be "ConsoleLogger", "FileLogger" or a custom class/object implementing { logBuckets: function }.
+//				config:					//	optional
+//				{
+//					//	with ConsoleLogger
+//					runtimeInitial:							//	optional; ConsoleLogger uses the values specified as properties to this object as initial configuration.
+//					{
+//						verbosity: string,					//	optional; ConsoleLogger uses the values specified as properties to this object as initial configuration.
+//					},
+//
+//					//	with FileLogger
+//					runtimeInitial:							//	optional; FileLogger uses the values specified as properties to this object as initial configuration.
+//					{
+//						verbosity: EVerbosity,				//	optional, defaults to `EVerbosity.Full`
+//						logPath: string,					//	optional, defaults to `"__pflogs"`
+//						archivePath: string,				//	optional, defaults to `"__pfarchive"`
+//						maxLogSizeBytes: uint,				//	optional, defaults to `0` (disabled); use `0` to disable log archiving
+//						maxArchiveSizeBytes: uint,			//	optional, defaults to `0` (disabled); use `0` to disable archive collection trimming
+//						logRequestArchivingModulo: uint,	//	optional, defaults to `25`
+//						sourceKey: string,					//	optional, defaults to `""`
+//					},
+//				},
+//			},
+//		}
+//	```
 function __pfconfig(par)
 {
 	try
 	{
-		if (par.commandFilePath !== void 0 && par.commandFilePath !== null) runtimeConfiguration.commandFilePath = par.commandFilePath;
-		if (par.configurationFilePath !== void 0 && par.configurationFilePath !== null) runtimeConfiguration.configurationFilePath = par.configurationFilePath;
-		if (par.refreshSilenceTimeoutMs !== void 0 && par.refreshSilenceTimeoutMs !== null) runtimeConfiguration.refreshSilenceTimeoutMs = par.refreshSilenceTimeoutMs;
-
-		if (par.dataCollector) return __pf.instance.setDataCollector(par.dataCollector);
-
-		const arg = {};
-		arg.runtimeConfiguration = runtimeConfiguration;
-		arg.fallbackConfiguration = {};
-		arg.fallbackConfiguration.sortColumn = (par && par.sortColumn) ? par.sortColumn : "maxMs";
-		arg.logger = par.logger || __pf.ConsoleLogger;
-		arg.flushDelayMs = par.flushDelayMs !== void 0 ? par.flushDelayMs : 0;
-
-		const dataCollector = new DataCollector(arg);
-		dataCollector.on("error", (...args) => _onError("data-collector", ...args));
-		dataCollector.on("configurationChanged", (...args) => _onConfigurationChanged("data-collector", ...args));
-
-		if (defaultProfiler)
+		const default_dataCollector_config =
 		{
-			if (__pf.instance.dataCollector)
+			runtimeConfigurator,
+			runtimeInitial:
 			{
-				__pf.instance.dataCollector.removeAllListeners("error");
-				__pf.instance.dataCollector.removeAllListeners("configurationChanged");
+				sortColumn: "maxMs",
+			},
+			flushDelayMs: 0,
+		};
+		const default_dataCollectorHttpProxy_config =
+		{
+			runtimeConfigurator,
+		};
+		const default_consoleLogger_config =
+		{
+			runtimeConfigurator,
+			runtimeInitial:
+			{
+				verbosity: EVerbosity.Full,
+			},
+		};
+		const default_fileLogger_config =
+		{
+			runtimeConfigurator,
+			runtimeInitial:
+			{
+				verbosity: EVerbosity.Full,
+				logPath: "__pflogs",
+				archivePath: "__pfarchive",
+				maxLogSizeBytes: 0,
+				maxArchiveSizeBytes: 0,
+				logRequestArchivingModulo: 25,
+				sourceKey: "",
+			},
+		};
+
+		//	runtimeConfigurator
+		if (par.commandFilePath !== void 0 && par.commandFilePath !== null) runtimeConfigurator.commandFilePath = par.commandFilePath;
+		if (par.configurationFilePath !== void 0 && par.configurationFilePath !== null) runtimeConfigurator.configurationFilePath = par.configurationFilePath;
+		if (par.refreshSilenceTimeoutMs !== void 0 && par.refreshSilenceTimeoutMs !== null) runtimeConfigurator.refreshSilenceTimeoutMs = par.refreshSilenceTimeoutMs;
+		if (par.initialEnabled !== void 0 && par.initialEnabled !== null) runtimeConfigurator.enabled = par.initialEnabled;
+
+		//	dataCollector, logger
+		const createNewDataCollector = !!(par.dataCollector?.type || par.logger);
+		const createDataCollectorNewLogger = !!par.dataCollector?.logger?.type;
+		const createNewLogger = !!(!createDataCollectorNewLogger && par.logger?.type);
+		const useDataCollectorInstance = !!(par.dataCollector && !par.dataCollector.type);
+		const useDataCollectorLoggerInstance = !!(par.dataCollector?.logger && !par.dataCollector?.logger.type);
+		const useLoggerInstance = !!(!useDataCollectorLoggerInstance && par.logger && !par.logger.type);
+
+		let logger;
+		if (createNewLogger || createDataCollectorNewLogger)
+		{
+			const loggerDef = createNewLogger ? par.logger : par.dataCollector.logger;
+			switch (loggerDef.type)
+			{
+				case "ConsoleLogger":
+					logger = new ConsoleLogger(__blend(default_consoleLogger_config, loggerDef.config));
+					break;
+				case "FileLogger":
+					logger = new FileLogger(__blend(default_fileLogger_config, loggerDef.config));
+					break;
+				default:
+					if (!create) throw new Error(`A "create" callback is required to instanciate a profiler logger of type ${JSON.stringify(loggerDef.type)}.`);
+					logger = create(loggerDef.type, loggerDef.config);
+					break;
 			}
-			__pf.instance.setDataCollector(dataCollector);
+			__pf.instance.dataCollector?.logger?.removeAllListeners("info");
+			__pf.instance.dataCollector?.logger?.removeAllListeners("error");
+			__pf.instance.dataCollector?.logger?.removeAllListeners("configurationChanged");
+			logger.on("info", (...args) => _onInfo("file-logger", ...args));
+			logger.on("error", (...args) => _onError("file-logger", ...args));
+			logger.on("configurationChanged", (...args) => _onConfigurationChanged("file-logger", ...args));
 		}
-		else defaultProfiler = new Profiler(dataCollector);
+		else if (useLoggerInstance || useDataCollectorLoggerInstance)
+		{
+			logger = useLoggerInstance ? par.logger : par.dataCollector.logger;
+			__pf.instance.dataCollector?.logger?.removeAllListeners("info");
+			__pf.instance.dataCollector?.logger?.removeAllListeners("error");
+			__pf.instance.dataCollector?.logger?.removeAllListeners("configurationChanged");
+			logger.on("info", (...args) => _onInfo("file-logger", ...args));
+			logger.on("error", (...args) => _onError("file-logger", ...args));
+			logger.on("configurationChanged", (...args) => _onConfigurationChanged("file-logger", ...args));
+		}
+		else logger = __pf.DefaultConsoleLogger;
+
+		if (createNewDataCollector)
+		{
+			let dataCollector;
+			switch (par.dataCollector?.type)
+			{
+				case void 0:
+				case "DataCollector":
+					dataCollector = new DataCollector(__blend(default_dataCollector_config, par.dataCollector?.config || {} , { logger }));
+					break;
+				case "DataCollectorHttpProxy":
+					dataCollector = new DataCollectorHttpProxy(__blend(default_dataCollectorHttpProxy_config, par.dataCollector.config));
+					break;
+				default:
+					if (!par.create) throw new Error(`A "par.create" callback is required to instanciate a profiler data collector of type ${JSON.stringify(par.dataCollector.type)}.`);
+					dataCollector = par.create(par.dataCollector.type, par.dataCollector.config);
+					break;
+			}
+			__pf.instance.dataCollector?.removeAllListeners("info");
+			__pf.instance.dataCollector?.removeAllListeners("error");
+			__pf.instance.dataCollector?.removeAllListeners("configurationChanged");
+			dataCollector.on("info", (...args) => _onInfo("data-collector", ...args));
+			dataCollector.on("error", (...args) => _onError("data-collector", ...args));
+			dataCollector.on("configurationChanged", (...args) => _onConfigurationChanged("data-collector", ...args));
+			return __pf.instance.setDataCollector(dataCollector);
+		}
+		else if (useDataCollectorInstance)
+		{
+			const dataCollector = par.dataCollector;
+			__pf.instance.dataCollector?.removeAllListeners("info");
+			__pf.instance.dataCollector?.removeAllListeners("error");
+			__pf.instance.dataCollector?.removeAllListeners("configurationChanged");
+			dataCollector.on("info", (...args) => _onInfo("data-collector", ...args));
+			dataCollector.on("error", (...args) => _onError("data-collector", ...args));
+			dataCollector.on("configurationChanged", (...args) => _onConfigurationChanged("data-collector", ...args));
+			return __pf.instance.setDataCollector(dataCollector);
+		} 
+		else dataCollector = __pf.DefaultDataCollector;
 	}
 	catch (ex)
 	{
 		console.error("[raw-profiler]", 3456348758, "Uncaught exception, please report to raw-profiler vendor", ex, ex.stack);
+	}
+
+	function __blend(...args)
+	{
+		let result = args[0];
+		for (let length = args.length, i = 1; i < length; ++i) result = __do(result, args[i]);
+		return result;
+		
+		function __do(left, right)
+		{
+			let result = {};
+
+			// Iterate over the keys in the left object
+			for (let key in left)
+			{
+				// If the key is also in the right object and both values are objects, blend them
+				if (right.hasOwnProperty(key) && typeof left[key] === 'object' && typeof right[key] === 'object')
+				{
+					result[key] = blend(left[key], right[key]);
+				} else if (right.hasOwnProperty(key))
+				{
+					// If the key is in the right object, use the value from the right object
+					result[key] = right[key];
+				} else
+				{
+					// Otherwise, use the value from the left object
+					result[key] = left[key];
+				}
+			}
+
+			// Iterate over the keys in the right object to find any keys not in the left object
+			for (let key in right)
+			{
+				if (!left.hasOwnProperty(key))
+				{
+					result[key] = right[key];
+				}
+			}
+
+			return result;
+		}
 	}
 }
 
@@ -496,6 +632,8 @@ module.exports =
 		global.__pfend = __pfend;
 		global.__pflog = __pflog;
 		global.__pfschema = __pfschema;
+
+		return module.exports;
 	}
 };
 module.exports.__pf = __pf;
@@ -506,4 +644,14 @@ module.exports.__pfend = __pfend;
 module.exports.__pflog = __pflog;
 module.exports.__pfflush = __pfflush;
 module.exports.__pfschema = __pfschema;
+
+module.exports.EVerbosity = EVerbosity;
+module.exports.RuntimeConfigurator = RuntimeConfigurator;
+module.exports.ConsoleLogger = ConsoleLogger;
+module.exports.FileLogger = FileLogger;
+module.exports.DataCollector = DataCollector;
+module.exports.DataCollectorHttpProxy = DataCollectorHttpProxy;
+module.exports.MachineStats = MachineStats;
+module.exports.Profiler = Profiler;
+module.exports.DataCollectorServer = DataCollectorServer;
 //#endregion
