@@ -129,7 +129,7 @@ This function never throws an exception. See below for usage examples.
     - `__pf.utility.getKeysText(value)` - prints into a string a coma-separated list of the enumerable property names of `obj`;
     - `__pf.utility.stripStringify(obj, stripFieldPaths)` - stringifies `obj` via `JSON.stringify` while replacing all values at the specified `stripFieldPaths` by `"(stripped by raw-profiler)"`;
     - `__pf.utility.stripStringifyArray(arr, stripFieldPaths)` - stringifies `arr` while replacing all values at the specified `stripFieldPaths`;
-	- `__pf.osResourceStats` - a shorcut to `MachineStats.osResourceStats`;
+	- `__pf.osResourceStats` - a shorcut to `MachineStats.osResourceStats`; updated every 5 seconds;
     - `__pf.osResourceStats.avgCpu10sec` - OS CPU average for 10 s time window;
 	- `__pf.osResourceStats.avgCpu1min` - OS CPU average for 1 min time window;
 	- `__pf.osResourceStats.avgCpu5min` - OS CPU average for 5 min time window;

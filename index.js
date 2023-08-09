@@ -1,6 +1,8 @@
 "use strict";
 
 //	TODO:
+//		- add verbosity "log" - no table printout, only text+postfix
+//			- optimize implementation of "__pflog"
 //		- provide same initial configuration options from code (the`__pfconfig` function call) and from file (the `__pfconfig` file JSON).
 //			- design a strategy for profiling of multiple npm modules that create separate profiler instances
 //		- add remote configuration acquisition from a logging server rest point
@@ -10,6 +12,7 @@
 //		- make system stats modular; provide modules for CPU/RAM, disk space, log and archive size, mongodb server info, rabbitmq info.
 //		- force `__pfflush` to wait for any archiving started by the file logger before invoking the callback
 //		- allow user to completely override any console logging
+//		- migrate array sbs to string sbs
 //	DEBT:
 //	    -- migrate to async/await syntax
 //		-- replace all `.bind` calls with lambda functions
