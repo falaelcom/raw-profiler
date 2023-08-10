@@ -5,6 +5,7 @@
 //			- optimize implementation of "__pflog"
 //		- provide same initial configuration options from code (the`__pfconfig` function call) and from file (the `__pfconfig` file JSON).
 //			+ design a strategy for profiling of multiple npm modules that create separate profiler instances
+//			- examine the `__pfenabled` effect on logging server
 //		- add remote configuration acquisition from a logging server rest point
 //		- make sure all open hits end before the profiler/bucket enabled state changes
 //		- there are several flags such as `isRefreshing`; if necessary, add code to make sure that no exception or error might leave such flags up forever
