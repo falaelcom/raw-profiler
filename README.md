@@ -672,6 +672,7 @@ Sample config file illustrating all possible configuration fields:
 		{
 			"myBucket":
 			{
+		        "verbosity": "brief",
 				"enabled": false,                   //  used by both DataCollector and DataCollectorHttpProxy data collector; with DataCollectorHttpProxy (remote logging), allows for disabling profiling buckets also locally at the node application
 				"sortColumn": "total",              //  only used with a DataCollector data collector
 			},

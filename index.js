@@ -4,7 +4,7 @@
 //		- add verbosity "log" - no table printout, only text+postfix
 //			- optimize implementation of "__pflog"
 //		- provide same initial configuration options from code (the`__pfconfig` function call) and from file (the `__pfconfig` file JSON).
-//			- design a strategy for profiling of multiple npm modules that create separate profiler instances
+//			+ design a strategy for profiling of multiple npm modules that create separate profiler instances
 //		- add remote configuration acquisition from a logging server rest point
 //		- make sure all open hits end before the profiler/bucket enabled state changes
 //		- there are several flags such as `isRefreshing`; if necessary, add code to make sure that no exception or error might leave such flags up forever
@@ -13,6 +13,8 @@
 //		- force `__pfflush` to wait for any archiving started by the file logger before invoking the callback
 //		- allow user to completely override any console logging
 //		- migrate array sbs to string sbs
+//		- do sth with the default instances and console logging, including letting the user configure console logging instead of using `console.log` directly
+//			- create no default instances
 //	DEBT:
 //	    -- migrate to async/await syntax
 //		-- replace all `.bind` calls with lambda functions
@@ -34,7 +36,8 @@ const { DataCollectorServer } = require("./lib/DataCollectorServer.js");
 //#region Interface
 const _onInfo = (source, message) => console.log("[raw-profiler]", `[${source}]`, message);
 const _onError = (source, ncode, message, ex) => console.error("[raw-profiler]", `[${source}]`, ncode, message, ex);
-const _onConfigurationChanged = (source, key, value, oldValue) => console.log("[raw-profiler]", `[${source}]`, `Runtime configuration field "${key}" changed from ${JSON.stringify(oldValue)} to ${JSON.stringify(value)}.`, "\n[raw-profiler] profiler effective config\n" + __pf.instance.printConfigurationLines());
+const _onConfigurationChanged = (source, key, value, oldValue) => console.log("[raw-profiler]", `[${source}]`, `Runtime configuration field "${key}" changed from ${JSON.stringify(oldValue)} to ${JSON.stringify(value)}.`);
+const _onConfigurationRefreshFinished = (hasChanged) => hasChanged && console.log("[raw-profiler] Effective config is now:\n" + (defaultServer ? defaultServer.printConfigurationLines() : __pf.instance.printConfigurationLines()));
 
 //	The `runtimeConfigurator` instance is a shared between all configuration targets.
 const runtimeConfigurator = new RuntimeConfigurator(
@@ -43,11 +46,13 @@ const runtimeConfigurator = new RuntimeConfigurator(
 	configurationFilePath: "__pfconfig",
 	refreshSilenceTimeoutMs: 5000,
 });
+runtimeConfigurator.on("refreshFinished", _onConfigurationRefreshFinished);
 
 let defaultConsoleLogger = null;
 let defaultFileLogger = null;
 let defaultDataCollector = null;
 let defaultProfiler = null;
+let defaultServer = null;
 
 //	Object: Publishes more profiling and configuration facilities beyond the `__pf*` function family.
 const __pf =
@@ -120,6 +125,7 @@ const __pf =
 			logger: this.DefaultConsoleLogger,
 			flushDelayMs: 0,
 		});
+		defaultDataCollector.on("info", (...args) => _onInfo("default-data-collector", ...args));
 		defaultDataCollector.on("error", (...args) => _onError("default-data-collector", ...args));
 		defaultDataCollector.on("configurationChanged", (...args) => _onConfigurationChanged("default-data-collector", ...args));
 		return defaultDataCollector;
@@ -151,10 +157,13 @@ const __pf =
 	//	Returns: the newly created and configured `DataCollectorServer` instance.
 	createDataCollectorServer: function (par)
 	{
+		if (defaultServer) throw new Error(`Only one server instance is supported.`);
+
 		par = par || {};
 
 		const result = new DataCollectorServer(
 		{
+			runtimeConfigurator,
 			host: par.host || "0.0.0.0",
 			port: par.port || 9666,
 			createDataCollector(sourceKey)
@@ -164,12 +173,9 @@ const __pf =
 					runtimeConfigurator,
 					runtimeInitial:
 					{
-						verbosity: (par.fileLogger && par.fileLogger.verbosity)
-							|| EVerbosity.Full,
-						logPath: (par.fileLogger && par.fileLogger.logPath)
-							|| "__pflogs",
-						archivePath: (par.fileLogger && par.fileLogger.archivePath)
-							|| "__pfarchive",
+						verbosity: par.fileLogger?.verbosity || EVerbosity.Full,
+						logPath: par.fileLogger?.logPath || "__pflogs",
+						archivePath: par.fileLogger?.archivePath || "__pfarchive",
 						maxLogSizeBytes: (par.fileLogger && !isNaN(par.fileLogger.maxLogSizeBytes))
 							? par.fileLogger.maxLogSizeBytes : 200 * 1024 * 1024, //  200MB
 						maxArchiveSizeBytes: (par.fileLogger && !isNaN(par.fileLogger.maxArchiveSizeBytes))
@@ -188,11 +194,12 @@ const __pf =
 					runtimeConfigurator,
 					runtimeInitial:
 					{
-						sortColumn: (par.dataCollector && par.dataCollector.sortColumn) || "maxMs",
+						sortColumn: par.dataCollector?.sortColumn || "maxMs",
 					},
 					logger: fileLogger,
 					flushDelayMs: (par.dataCollector && !isNaN(par.dataCollector.flushDelayMs)) || 0,
 				});
+				result.on("info", (...args) => _onInfo(`data-collector:${sourceKey}`, ...args));
 				result.on("error", (...args) => _onError(`data-collector:${sourceKey}`, ...args));
 				result.on("configurationChanged", (...args) => _onConfigurationChanged(`data-collector:${sourceKey}`, ...args));
 
@@ -201,6 +208,10 @@ const __pf =
 		});
 		result.on("info", (...args) => _onInfo("data-collector-server", ...args));
 		result.on("error", (...args) => _onError("data-collector-server", ...args));
+		result.on("configurationChanged", (...args) => _onConfigurationChanged(`data-collector-server`, ...args));
+
+		defaultServer = result;
+
 		return result;
 	},
 
