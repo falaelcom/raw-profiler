@@ -38,7 +38,7 @@ const { DataCollectorServer } = require("./lib/DataCollectorServer.js");
 const _onInfo = (source, message) => console.log("[raw-profiler]", `[${source}]`, message);
 const _onError = (source, ncode, message, ex) => console.error("[raw-profiler]", `[${source}]`, ncode, message, ex);
 const _onConfigurationChanged = (source, key, value, oldValue) => console.log("[raw-profiler]", `[${source}]`, `Runtime configuration field "${key}" changed from ${JSON.stringify(oldValue)} to ${JSON.stringify(value)}.`);
-const _onConfigurationRefreshFinished = (hasChanged) => hasChanged && console.log("[raw-profiler] Effective config is now:\n" + (defaultServer ? defaultServer.printConfigurationLines() : __pf.instance.printConfigurationLines()));
+const _onConfigurationRefreshFinished = (hasChanged) => hasChanged && console.log("[raw-profiler] =================================\n" + "[raw-profiler] Effective config\n[raw-profiler] =================================\n" + (defaultServer ? defaultServer.printConfigurationLines() : __pf.instance.printConfigurationLines()));
 
 //	The `runtimeConfigurator` instance is a shared between all configuration targets.
 const runtimeConfigurator = new RuntimeConfigurator(

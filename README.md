@@ -1,6 +1,8 @@
 ABSTRACT
 ==================================================
 
+**WARNING: ALPHA VERSION (lots of bugs, including new ones, interfaces change without warning between minor version updates); suitable mainly for exploration and not for production.**
+
 The purpose of `raw-profiler` is to enable nodejs application profiling and high-volutme logging in production environments *without* the need for reconfiguration downtime, external 
 service dependencies or running environment reconfiguration. To acieve this goal, `raw-profiler` offers the following facilities:
 
@@ -188,7 +190,7 @@ Here is a very simple NodeJS application implementing a single profiling hit poi
     const { __pf, __pfconfig, __pfenabled, __pfbegin, __pfend } = require("raw-profiler");
     const _sleep = ms => new Promise(f => setTimeout(f, ms));
 
-    console.log("[raw-profiler] profiler initial config\n" + __pf.instance.printConfigurationLines());
+    console.log("[raw-profiler] =================================\n[raw-profiler] Profiler initial config\n[raw-profiler] =================================\n" + __pf.instance.printConfigurationLines());
 
     async function test()
     {

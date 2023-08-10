@@ -1,6 +1,6 @@
 {
     "name": "raw-profiler",
-    "version": "1.0.13-alpha.12",
+    "version": "1.0.13-alpha.13",
     "description": "A robust, heavy-duty nodejs application profiler and logger for production environments.",
     "main": "index.js",
     "keywords": [
