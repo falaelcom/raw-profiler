@@ -169,21 +169,27 @@ const __pf =
 			runtimeConfigurator,
 			host: par.host || "0.0.0.0",
 			port: par.port || 9666,
-			createDataCollector(sourceKey)
+			createDataCollector(sourceKey, configStore)
 			{
 				const fileLogger = new FileLogger(
 				{
 					runtimeConfigurator,
 					runtimeInitial:
 					{
-						verbosity: par.fileLogger?.verbosity || EVerbosity.Full,
-						logPath: par.fileLogger?.logPath || "__pflogs",
-						archivePath: par.fileLogger?.archivePath || "__pfarchive",
-						maxLogSizeBytes: (par.fileLogger && !isNaN(par.fileLogger.maxLogSizeBytes))
+						verbosity: configStore["logger.verbosity"] || par.fileLogger?.verbosity || EVerbosity.Full,
+						logPath: configStore["logger.logPath"] || par.fileLogger?.logPath || "__pflogs",
+						archivePath: configStore["logger.archivePath"] || par.fileLogger?.archivePath || "__pfarchive",
+						maxLogSizeBytes:
+							!isNaN(configStore["logger.maxLogSizeBytes"])
+							? configStore["logger.maxLogSizeBytes"] : (par.fileLogger && !isNaN(par.fileLogger.maxLogSizeBytes))
 							? par.fileLogger.maxLogSizeBytes : 200 * 1024 * 1024, //  200MB
-						maxArchiveSizeBytes: (par.fileLogger && !isNaN(par.fileLogger.maxArchiveSizeBytes))
+						maxArchiveSizeBytes:
+							!isNaN(configStore["logger.maxArchiveSizeBytes"])
+							? configStore["logger.maxArchiveSizeBytes"] : (par.fileLogger && !isNaN(par.fileLogger.maxArchiveSizeBytes))
 							? par.fileLogger.maxArchiveSizeBytes : 1024 * 1024 * 1024,	//  1GB
-						logRequestArchivingModulo: (par.fileLogger && !isNaN(par.fileLogger.logRequestArchivingModulo))
+						logRequestArchivingModulo:
+							!isNaN(configStore["logger.logRequestArchivingModulo"])
+							? configStore["logger.logRequestArchivingModulo"] : (par.fileLogger && !isNaN(par.fileLogger.logRequestArchivingModulo))
 							? par.fileLogger.logRequestArchivingModulo : 100,
 					},
 					sourceKey,
@@ -197,7 +203,7 @@ const __pf =
 					runtimeConfigurator,
 					runtimeInitial:
 					{
-						sortColumn: par.dataCollector?.sortColumn || "maxMs",
+						sortColumn: configStore["sortColumn"] || par.dataCollector?.sortColumn || "maxMs",
 					},
 					logger: fileLogger,
 					flushDelayMs: (par.dataCollector && !isNaN(par.dataCollector.flushDelayMs)) || 0,
