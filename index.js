@@ -23,6 +23,10 @@
 //		-- get rid of all `fs.*Sync` calls in FileLogger; currently synch calls only affect the logging server, and the task is not of highest priority
 //		-- add parameter value validation throughout the code
 
+const EventEmitter = require('events');
+EventEmitter.defaultMaxListeners = 666;
+
+
 const { EVerbosity } = require("./lib/EVerbosity.js");
 const { Utility } = require("./lib/Utility.js");
 const { RuntimeConfigurator } = require("./lib/RuntimeConfigurator.js");
@@ -169,27 +173,21 @@ const __pf =
 			runtimeConfigurator,
 			host: par.host || "0.0.0.0",
 			port: par.port || 9666,
-			createDataCollector(sourceKey, configStore)
+			createDataCollector(sourceKey)
 			{
 				const fileLogger = new FileLogger(
 				{
 					runtimeConfigurator,
 					runtimeInitial:
 					{
-						verbosity: configStore["logger.verbosity"] || par.fileLogger?.verbosity || EVerbosity.Full,
-						logPath: configStore["logger.logPath"] || par.fileLogger?.logPath || "__pflogs",
-						archivePath: configStore["logger.archivePath"] || par.fileLogger?.archivePath || "__pfarchive",
-						maxLogSizeBytes:
-							!isNaN(configStore["logger.maxLogSizeBytes"])
-							? configStore["logger.maxLogSizeBytes"] : (par.fileLogger && !isNaN(par.fileLogger.maxLogSizeBytes))
+						verbosity: par.fileLogger?.verbosity || EVerbosity.Full,
+						logPath: par.fileLogger?.logPath || "__pflogs",
+						archivePath: par.fileLogger?.archivePath || "__pfarchive",
+						maxLogSizeBytes: (par.fileLogger && !isNaN(par.fileLogger.maxLogSizeBytes))
 							? par.fileLogger.maxLogSizeBytes : 200 * 1024 * 1024, //  200MB
-						maxArchiveSizeBytes:
-							!isNaN(configStore["logger.maxArchiveSizeBytes"])
-							? configStore["logger.maxArchiveSizeBytes"] : (par.fileLogger && !isNaN(par.fileLogger.maxArchiveSizeBytes))
+						maxArchiveSizeBytes: (par.fileLogger && !isNaN(par.fileLogger.maxArchiveSizeBytes))
 							? par.fileLogger.maxArchiveSizeBytes : 1024 * 1024 * 1024,	//  1GB
-						logRequestArchivingModulo:
-							!isNaN(configStore["logger.logRequestArchivingModulo"])
-							? configStore["logger.logRequestArchivingModulo"] : (par.fileLogger && !isNaN(par.fileLogger.logRequestArchivingModulo))
+						logRequestArchivingModulo: (par.fileLogger && !isNaN(par.fileLogger.logRequestArchivingModulo))
 							? par.fileLogger.logRequestArchivingModulo : 100,
 					},
 					sourceKey,
@@ -203,7 +201,7 @@ const __pf =
 					runtimeConfigurator,
 					runtimeInitial:
 					{
-						sortColumn: configStore["sortColumn"] || par.dataCollector?.sortColumn || "maxMs",
+						sortColumn: par.dataCollector?.sortColumn || "maxMs",
 					},
 					logger: fileLogger,
 					flushDelayMs: (par.dataCollector && !isNaN(par.dataCollector.flushDelayMs)) || 0,

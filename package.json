@@ -1,9 +1,10 @@
 {
     "name": "raw-profiler",
-    "version": "1.0.16-alpha.16",
+    "version": "1.0.16-alpha.17",
     "description": "A robust, heavy-duty profiler and logger for nodejs applications production environments.",
     "main": "index.js",
-    "keywords": [
+    "keywords":
+    [
         "profiler",
         "profiling",
         "logger",
@@ -11,23 +12,28 @@
     ],
     "author": "falael.com",
     "license": "MIT/X Consortium License",
-    "repository": {
+    "repository":
+    {
         "type": "git",
         "url": "https://github.com/falaelcom/raw-profiler.git"
     },
-    "maintainers": [
+    "maintainers":
+    [
         {
             "email": "daniel@falael.com",
             "name": "Danny Apostolov"
         }
     ],
-    "scripts": {
+    "scripts":
+    {
         "test": "echo \"Error: no test specified\" && exit 1"
     },
-    "engines": {
+    "engines":
+    {
         "node": ">= 16"
     },
-    "dependencies": {
+    "dependencies":
+    {
         "archiver": "^5.3.1",
         "async": "^3.2.4",
         "body-parser": "^1.20.2",
