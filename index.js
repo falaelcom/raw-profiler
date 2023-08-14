@@ -26,6 +26,7 @@
 const { EVerbosity } = require("./lib/EVerbosity.js");
 const { Utility } = require("./lib/Utility.js");
 const { RuntimeConfigurator } = require("./lib/RuntimeConfigurator.js");
+const { RemoteRuntimeConfigurator } = require("./lib/RemoteRuntimeConfigurator.js");
 const { ConsoleLogger } = require("./lib/ConsoleLogger.js"); 
 const { FileLogger } = require("./lib/FileLogger.js");
 const { DataCollector } = require("./lib/DataCollector.js");
@@ -37,17 +38,18 @@ const { DataCollectorServer } = require("./lib/DataCollectorServer.js");
 //#region Interface
 const _onInfo = (source, message) => console.log("[raw-profiler]", `[${source}]`, message);
 const _onError = (source, ncode, message, ex) => console.error("[raw-profiler]", `[${source}]`, ncode, message, ex);
-const _onConfigurationChanged = (source, key, value, oldValue) => console.log("[raw-profiler]", `[${source}]`, `Runtime configuration field "${key}" changed from ${JSON.stringify(oldValue)} to ${JSON.stringify(value)}.`);
+const _onConfigurationChanged = (target, key, value, oldValue, source, ctimes) => console.log("[raw-profiler]", `[${target}]`, `Runtime configuration field "${key}" changed via ${source} from ${JSON.stringify(oldValue)} to ${JSON.stringify(value)}.`);
 const _onConfigurationRefreshFinished = (hasChanged) => hasChanged && console.log("[raw-profiler] =================================\n" + "[raw-profiler] Effective config\n[raw-profiler] =================================\n" + (defaultServer ? defaultServer.printConfigurationLines() : __pf.instance.printConfigurationLines()));
 
 //	The `runtimeConfigurator` instance is a shared between all configuration targets.
-const runtimeConfigurator = new RuntimeConfigurator(
+let runtimeConfigurator = new RuntimeConfigurator(
 {
 	commandFilePath: "__pfenable",
 	configurationFilePath: "__pfconfig",
 	refreshSilenceTimeoutMs: 5000,
 });
 runtimeConfigurator.on("refreshFinished", _onConfigurationRefreshFinished);
+runtimeConfigurator.on("configurationChanged", (...args) => _onConfigurationChanged("runtime-configurator", ...args));
 
 let defaultConsoleLogger = null;
 let defaultFileLogger = null;
@@ -286,10 +288,14 @@ const __pf =
 //	```
 //		par:
 //		{
+//			useRemoteConfig: boolean,						//	optional, defaults to false; only has meaning with DataCollectorHttpProxy; if set to `true` will cause the runtime configuration to be acquired remotely from the data collector server, and the local `__pfenable` and `__pfconfig` files will be ignored, as well as the following configuration properties below: `commandFilePath`, `configurationFilePath`, `refreshSilenceTimeoutMs`; `initialEnabled` will determine whether the proxy will be processing feeds before the remote configuration has been acquired.
+//			remoteConfigRequestTimeoutMs: uint,				//	optional, defaults to 5000; only applicable with useRemoteConfig.
+//			repeatOnRemoteConfigFailureIntervalMs: uint,	//	optional, defaults to 60000; only applicable with useRemoteConfig.
+//
+//			initialEnabled: boolean,			//	optional, defaults to true; provides an initial value for the profiler enabled state before the command file has been queried for the first time.
 //			commandFilePath: string,			//	optional, defaults to "__pfenable"; the path to the runtime command file for raw-profiler, e.g. /home/user/__pfenable; the existance of the command file determines the enabled state of the raw-profiler; if there is no such file, the raw-profiler functionality is completely disabled except for testing for the command file existence.
 //			configurationFilePath: string,		//	optional, defaults to "__pfconfig"; the path to the runtime configuration file for raw-profiler, e.g. /home/user/__pfconfig.
 //			refreshSilenceTimeoutMs: uint,		//	optional, defaults to 5000; run-time configuration refresh-from-file attempts will be performed no more frequently than once every refreshSilenceTimeoutMs milliseconds.
-//			initialEnabled: boolean,			//	optional, defaults to true; provides an initial value for the profiler enabled state before the command file has been queried for the first time.
 //
 //			create(className, config): object,	//	optional; if set will be called whenever a non-standard data collector or logger need to be created (see par.dataCollector.type and par.dataCollector.logger.type).
 //			dataCollector:						//	optional, if not set __pf.DefaultDataCollector is used; configuration for a new data collector instance; if the provided value has no type propery, this value is assumed to be a data collector instance.
@@ -332,7 +338,7 @@ const __pf =
 //					//	with DataCollectorHttpProxy
 //					runtimeInitial:						//	required; DataCollectorHttpProxy uses the values specified as properties to this object as initial configuration.
 //					{
-//						uri: string,					//	required; DataCollectorHttpProxy will forward profiling data by sending HTTP requests to this endpoint until overwritten by the runtime configuration.
+//						uri: string,					//	required; DataCollectorHttpProxy will forward profiling data by sending HTTP requests to this URI until overwritten by the runtime configuration.
 //						sourceKey: string,				//	required; this key is used by the remote logging server as part of the log file paths allowing for multiple application servers to feed data to a single logging server until overwritten by the runtime configuration.
 //						requestTimeoutMs: uint,			//	required; specifies a timeout for HTTP requests before abortion until overwritten by the runtime configuration.
 //						failureTimeoutMs: uint,			//	required; specifies the time between reporting repeated HTTP request failures until overwritten by the runtime configuration.
@@ -377,6 +383,27 @@ function __pfconfig(par)
 {
 	try
 	{
+		//	runtimeConfigurator
+		if (par.useRemoteConfig)
+		{
+			runtimeConfigurator.removeAllListeners();
+			runtimeConfigurator = new RemoteRuntimeConfigurator(
+			{
+				initialEnabled: par.initialEnabled,
+				remoteConfigRequestTimeoutMs: par.remoteConfigRequestTimeoutMs,
+				repeatOnRemoteConfigFailureIntervalMs: par.repeatOnRemoteConfigFailureIntervalMs,
+			});
+			runtimeConfigurator.on("refreshFinished", _onConfigurationRefreshFinished);
+			runtimeConfigurator.on("configurationChanged", (...args) => _onConfigurationChanged("remote-runtime-configurator", ...args));
+		}
+		else
+		{
+			if (par.commandFilePath !== void 0 && par.commandFilePath !== null) runtimeConfigurator.commandFilePath = par.commandFilePath;
+			if (par.configurationFilePath !== void 0 && par.configurationFilePath !== null) runtimeConfigurator.configurationFilePath = par.configurationFilePath;
+			if (par.refreshSilenceTimeoutMs !== void 0 && par.refreshSilenceTimeoutMs !== null) runtimeConfigurator.refreshSilenceTimeoutMs = par.refreshSilenceTimeoutMs;
+			if (par.initialEnabled !== void 0 && par.initialEnabled !== null) runtimeConfigurator.enabled = par.initialEnabled;
+		}
+
 		const default_dataCollector_config =
 		{
 			runtimeConfigurator,
@@ -412,12 +439,6 @@ function __pfconfig(par)
 				sourceKey: "",
 			},
 		};
-
-		//	runtimeConfigurator
-		if (par.commandFilePath !== void 0 && par.commandFilePath !== null) runtimeConfigurator.commandFilePath = par.commandFilePath;
-		if (par.configurationFilePath !== void 0 && par.configurationFilePath !== null) runtimeConfigurator.configurationFilePath = par.configurationFilePath;
-		if (par.refreshSilenceTimeoutMs !== void 0 && par.refreshSilenceTimeoutMs !== null) runtimeConfigurator.refreshSilenceTimeoutMs = par.refreshSilenceTimeoutMs;
-		if (par.initialEnabled !== void 0 && par.initialEnabled !== null) runtimeConfigurator.enabled = par.initialEnabled;
 
 		//	dataCollector, logger
 		const createNewDataCollector = !!(par.dataCollector?.type || par.logger);

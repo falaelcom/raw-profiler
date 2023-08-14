@@ -8,7 +8,7 @@ service dependencies or running environment reconfiguration. To acieve this goal
 
 - API for adding profiling and logging directly into application's code;
 - control of profiling and logging levels without restarting the running instances, from none to full;
-- remote logging for offloading the application server from computationally-intense string-concatenation and IO operations;
+- remote logging for offloading the application server from computationally-intensive string-concatenation and IO operations;
 - log lifecycle management, including log rotation, archiving and compression.
 
 Consider the following before using `raw-profiler`:
@@ -93,8 +93,9 @@ There are two ways to import `raw-profiler`:
 Option 1. is complient with the best programming practices by avoiding global scope contamination.
 
 Option 2. allows for adding and removing of logging and profiling code quickly and easily without the burden of constantly adding and removing profiling function declarations. When working
-on large projects with lots of logging and profiling, this consideration might overcome the best programming practice requirements. `raw-profiler` intentionally uses rather
-specific function names lowering the chance for name collisions.
+on large projects with lots of logging and profiling, this consideration might overcome the best programming practice requirements. Another major consideration is maintaining a single profiler 
+instance in memory with a complex hierarchy of npm modules containing profiling hit points. In such cases the cost of passing a profiler instance down the node module tree might be unacceptable;
+Option 2 provides an easy way around such challenge. `raw-profiler` intentionally uses rather specific function names lowering the chance for name collisions.
 
 For illustrative purposes, both import styles are used interchangeably in this document.
 
@@ -291,7 +292,7 @@ _Appropriate for profiling scenarios with heavy server loads._
 
 In the application main file (e.g. `app.js`), add
 
-    const { DataCollectorHttpProxy } = require("raw-profiler").global();
+    require("raw-profiler").global();
     __pfconfig(
     {
         dataCollector:
@@ -299,7 +300,7 @@ In the application main file (e.g. `app.js`), add
 		    type: "DataCollectorHttpProxy",
 		    config:
 		    {
-                uri: "http://127.0.0.1:9666/feed",
+                uri: "http://127.0.0.1:9666",
                 sourceKey: "node1",
                 requestTimeoutMs: 5000,
                 failureTimeoutMs: 60000,
@@ -311,6 +312,7 @@ In the application main file (e.g. `app.js`), add
     //  will timeout outgoing logging requests in 5000 ms (default is 2000 ms)
     //	the remote server will append "-node1" to the name of the subdirectory that will strore the logs from this particular application instance
     //	    allowing one logging server to collect data from many application running instances
+    //  will use the remote server as configuration source
 
 
 _NOTE: The data collection proxy accepts a `sourceKey` parameter. If `sourceKey` is set, the data collection server will append a stripped version of this string to the logging subdirectory, e.g. it will use `127.0.0.1-development` instead of the plain `127.0.0.1`._
@@ -530,6 +532,7 @@ __pfconfig
 //	```
 //		par:
 //		{
+//			useRemoteConfig: boolean,			//	optional, defaults to false; only has meaning with DataCollectorHttpProxy; if set to `true` will cause the runtime configuration to be acquired remotely from the data collector server, and the local `__pfenable` and `__pfconfig` files will be ignored, as well as the following configuration properties below: `commandFilePath`, `configurationFilePath`, `refreshSilenceTimeoutMs`; `initialEnabled` will determine whether the proxy will be processing feeds before the remote configuration has been acquired.
 //			commandFilePath: string,			//	optional, defaults to "__pfenable"; the path to the runtime command file for raw-profiler, e.g. /home/user/__pfenable; the existance of the command file determines the enabled state of the raw-profiler; if there is no such file, the raw-profiler functionality is completely disabled except for testing for the command file existence.
 //			configurationFilePath: string,		//	optional, defaults to "__pfconfig"; the path to the runtime configuration file for raw-profiler, e.g. /home/user/__pfconfig.
 //			refreshSilenceTimeoutMs: uint,		//	optional, defaults to 5000; run-time configuration refresh-from-file attempts will be performed no more frequently than once every refreshSilenceTimeoutMs milliseconds.
@@ -576,7 +579,7 @@ __pfconfig
 //					//	with DataCollectorHttpProxy
 //					runtimeInitial:						//	required; DataCollectorHttpProxy uses the values specified as properties to this object as initial configuration.
 //					{
-//						uri: string,					//	required; DataCollectorHttpProxy will forward profiling data by sending HTTP requests to this endpoint until overwritten by the runtime configuration.
+//						uri: string,					//	required; DataCollectorHttpProxy will forward profiling data by sending HTTP requests to this URI until overwritten by the runtime configuration.
 //						sourceKey: string,				//	required; this key is used by the remote logging server as part of the log file paths allowing for multiple application servers to feed data to a single logging server until overwritten by the runtime configuration.
 //						requestTimeoutMs: uint,			//	required; specifies a timeout for HTTP requests before abortion until overwritten by the runtime configuration.
 //						failureTimeoutMs: uint,			//	required; specifies the time between reporting repeated HTTP request failures until overwritten by the runtime configuration.
@@ -665,7 +668,7 @@ Sample config file illustrating all possible configuration fields:
         },
         "proxy":                                    //  only used with a DataCollectorHttpProxy data collector
         {
-            "uri": "http://127.0.0.1:9666/feed",
+            "uri": "http://127.0.0.1:9666",
             "sourceKey": "node1",
             "requestTimeoutMs": 5000,
             "failureTimeoutMs": 60000,
