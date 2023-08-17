@@ -1,27 +1,35 @@
 "use strict";
 
 //	TODO:
+//		- change the interface of raw-profiler
+//			- reimagine instanciation and configuration of different components
+//				- introduce configuration templates that cover settings for multiple components (currently covered by `__pfconfig` as one huge json with invisible interpretation rules, such as - this property is used only with data collector http proxy)
+//				- introduce configuration filed type ("preconf", "runtime", "hardcod", "remote") in configuration templates
+//				- streamline run-time configuration changes through configuration templates; streamline all configuration through configuration templates
+//			- create no default instances
 //		- add verbosity "log" - no table printout, only text+postfix
 //			- optimize implementation of "__pflog"
-//		- provide same initial configuration options from code (the`__pfconfig` function call) and from file (the `__pfconfig` file JSON).
+//		+ provide same initial configuration options from code (the`__pfconfig` function call) and from file (the `__pfconfig` file JSON).
 //			+ design a strategy for profiling of multiple npm modules that create separate profiler instances
 //			- examine the `__pfenabled` effect on logging server
-//		- add remote configuration acquisition from a logging server rest point
+//		+ add remote configuration acquisition from a logging server rest point
+//			- test thoroughly
 //		- make sure all open hits end before the profiler/bucket enabled state changes
 //		- there are several flags such as `isRefreshing`; if necessary, add code to make sure that no exception or error might leave such flags up forever
 //		- the CPU usage is being calculated based on OS and not node js process CPU stats (older node js versions lack a required api). Desired solution - detect node js version and enable node js process CPU stats when possible.
 //		- make system stats modular; provide modules for CPU/RAM, disk space, log and archive size, mongodb server info, rabbitmq info.
 //		- force `__pfflush` to wait for any archiving started by the file logger before invoking the callback
-//		- allow user to completely override any console logging
-//		- migrate array sbs to string sbs
+//		- allow user to completely override any console logging done by raw-profiler
 //		- do sth with the default instances and console logging, including letting the user configure console logging instead of using `console.log` directly
-//			- create no default instances
+//		- implement a new profiler http proxy /data collector server pair that doesn't store any state on the application server and
+//			instead proxies all single `__pfbegin/__pfend/__pflog/__pfflush` calls directly to the data collector server
 //	DEBT:
 //	    -- migrate to async/await syntax
 //		-- replace all `.bind` calls with lambda functions
 //		-- cache `hit.bucketKey + "*" + hit.key` in the hit
 //		-- get rid of all `fs.*Sync` calls in FileLogger; currently synch calls only affect the logging server, and the task is not of highest priority
 //		-- add parameter value validation throughout the code
+//		-- migrate array sbs to string sbs
 
 const EventEmitter = require('events');
 EventEmitter.defaultMaxListeners = 666;
@@ -619,18 +627,17 @@ function __pfend(hit, postfix)
 	return __pf.instance.end(hit, postfix);
 }
 
-//	Function: `__pflog(bucketKey: string, text: string): null` - records the specified `text` under the `bucketKey` with a hardcoded profiling key `"__pflog"` and no relevant execution data.
+//	Function: `__pflog(bucketKey: string, ...args): void` - writes `args` as text to the profiling logs without creating a hit point.
 //	Parameter: `bucketKey: string` - a key for grouping and configuration management of profiling data at log-file level; a single profiling bucket usually corresponds to a single
 //		profiling hit point in the code, for Ex. `"CRUD"`, `"REST"`, `"RPC"`, `"VerySpecificSuspiciousLoop"`.
-//	Parameter: `text: string` - a text used as a title for profiling stats tables with `EVerbosity.Brief` and `EVerbosity.Full` and as a logging line with `EVerbosity.Log`.
-//	Returns: Always returns `null`.
+//	Parameter: `...args` - arguments will be joined via `args.join(" ")` and the result will be used as text for the logging operaiton.
 //	Remarks: 
 //		This function never throws an exception.
 //		Always use `Utility.stripStringify` before logging objects via `text` to ensure that no sensitive data such as unencrypted passwords will appear in the logs.
 //		This function is a shorthand for `__pfend(__pfbegin(bucketKey, "PFLOG", text));`
-function __pflog(bucketKey, text)
+function __pflog(bucketKey, ...args)
 {
-	return __pf.instance.end(__pf.instance.begin(bucketKey, "__pflog", text));
+	return __pf.instance.log(bucketKey, args.join(" "));
 }
 
 function __pfschema(obj)
