@@ -120,7 +120,9 @@ This function never throws an exception. See below for usage examples.
 * `__pfflush()` - immediately initiates the process of flushing the queues to the logger. See `index.js`, `function __pfflush(callback, stopLogging = true)` for code comments.
 This function never throws an exception. See below for usage examples.
 
-* `__pfschema()` - 
+* `__pfschema(obj)` - 
+
+* `__pfjson(obj, stripFieldPaths)` - 
 
 * `__pf` - an object holding the current state of the profiler, helper functions and properties; see `index.js` for code comments:
     - `__pf.DefaultFileLogger` - a preconfigured default `FileLogger` instance;

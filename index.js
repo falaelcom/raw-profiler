@@ -181,22 +181,22 @@ const __pf =
 			runtimeConfigurator,
 			host: par.host || "0.0.0.0",
 			port: par.port || 9666,
-			createDataCollector(sourceKey)
+			createDataCollector(sourceKey, currentConfig)
 			{
 				const fileLogger = new FileLogger(
 				{
 					runtimeConfigurator,
 					runtimeInitial:
 					{
-						verbosity: par.fileLogger?.verbosity || EVerbosity.Full,
-						logPath: par.fileLogger?.logPath || "__pflogs",
-						archivePath: par.fileLogger?.archivePath || "__pfarchive",
-						maxLogSizeBytes: (par.fileLogger && !isNaN(par.fileLogger.maxLogSizeBytes))
-							? par.fileLogger.maxLogSizeBytes : 200 * 1024 * 1024, //  200MB
-						maxArchiveSizeBytes: (par.fileLogger && !isNaN(par.fileLogger.maxArchiveSizeBytes))
-							? par.fileLogger.maxArchiveSizeBytes : 1024 * 1024 * 1024,	//  1GB
-						logRequestArchivingModulo: (par.fileLogger && !isNaN(par.fileLogger.logRequestArchivingModulo))
-							? par.fileLogger.logRequestArchivingModulo : 100,
+						verbosity: currentConfig?.["logger.verbosity"] || par.fileLogger?.verbosity || EVerbosity.Full,
+						logPath: currentConfig?.["logger.logPath"] || par.fileLogger?.logPath || "__pflogs",
+						archivePath: currentConfig?.["logger.archivePath"] || par.fileLogger?.archivePath || "__pfarchive",
+						maxLogSizeBytes: !isNaN(currentConfig?.["logger.maxLogSizeBytes"]) ? currentConfig?.["logger.maxLogSizeBytes"] :
+							(par.fileLogger && !isNaN(par.fileLogger.maxLogSizeBytes)) ? par.fileLogger.maxLogSizeBytes : 200 * 1024 * 1024, //  200MB
+						maxArchiveSizeBytes: !isNaN(currentConfig?.["logger.maxArchiveSizeBytes"]) ? currentConfig?.["logger.maxArchiveSizeBytes"] :
+							(par.fileLogger && !isNaN(par.fileLogger.maxArchiveSizeBytes)) ? par.fileLogger.maxArchiveSizeBytes : 1024 * 1024 * 1024,	//  1GB
+						logRequestArchivingModulo: !isNaN(currentConfig?.["logger.logRequestArchivingModulo"]) ? currentConfig?.["logger.logRequestArchivingModulo"] :
+							(par.fileLogger && !isNaN(par.fileLogger.logRequestArchivingModulo)) ? par.fileLogger.logRequestArchivingModulo : 100,
 					},
 					sourceKey,
 				});
@@ -204,16 +204,19 @@ const __pf =
 				fileLogger.on("error", (...args) => _onError(`file-logger:${sourceKey}`, ...args));
 				fileLogger.on("configurationChanged", (...args) => _onConfigurationChanged(`file-logger:${sourceKey}`, ...args));
 
-				const result = new DataCollector(
+				const arg =
 				{
 					runtimeConfigurator,
 					runtimeInitial:
 					{
-						sortColumn: par.dataCollector?.sortColumn || "maxMs",
+						sortColumn: currentConfig?.["sortColumn"] || par.dataCollector?.sortColumn || "maxMs",
 					},
 					logger: fileLogger,
-					flushDelayMs: (par.dataCollector && !isNaN(par.dataCollector.flushDelayMs)) || 0,
-				});
+					flushDelayMs: (par.dataCollector && !isNaN(par.dataCollector.flushDelayMs)) ? 
+					par.dataCollector.flushDelayMs : 0,
+				};
+				if (currentConfig) for (const key in currentConfig) (key.indexOf("bucket.") === 0) && (arg.runtimeInitial[key] = currentConfig[key]);
+				const result = new DataCollector(arg);
 				result.on("info", (...args) => _onInfo(`data-collector:${sourceKey}`, ...args));
 				result.on("error", (...args) => _onError(`data-collector:${sourceKey}`, ...args));
 				result.on("configurationChanged", (...args) => _onConfigurationChanged(`data-collector:${sourceKey}`, ...args));
@@ -649,7 +652,21 @@ function __pfschema(obj)
 	catch (ex)
 	{
 		_onError("__pfschema", 98475643, "Unexpected error.", ex);
-		return "";
+		return `(ERROR __pfschema, see server logs for details: ${ex.message})`;
+	}
+}
+
+function __pfjson(obj, stripFieldPaths = null)
+{
+	try
+	{
+		if (stripFieldPaths) return __pf.utility.stripStringify(obj, stripFieldPaths);
+		return JSON.stringify(obj);
+	}
+	catch (ex)
+	{
+		_onError("__pfjson", 98875643, "Unexpected error.", ex);
+		return `(ERROR __pfjson, see server logs for details): ${ex.message}`;
 	}
 }
 
@@ -678,6 +695,7 @@ module.exports =
 		global.__pfend = __pfend;
 		global.__pflog = __pflog;
 		global.__pfschema = __pfschema;
+		global.__pfjson = __pfjson;
 
 		return module.exports;
 	}
@@ -690,6 +708,7 @@ module.exports.__pfend = __pfend;
 module.exports.__pflog = __pflog;
 module.exports.__pfflush = __pfflush;
 module.exports.__pfschema = __pfschema;
+module.exports.__pfjson = __pfjson;
 
 module.exports.EVerbosity = EVerbosity;
 module.exports.RuntimeConfigurator = RuntimeConfigurator;
