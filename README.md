@@ -697,8 +697,8 @@ Sample config file illustrating all possible configuration fields:
         minMs
         avgMs
         maxMs (default)
-        totalSec
         totalMs
+        onMs
         avgCpu
         minAvgOsCpu
         avgAvgOsCpu
@@ -774,7 +774,8 @@ STATS TABLE COLUMNS
 - `minms` - the shortest execution time for the specified key on record; _sorting column name: `minMs`_
 - `avgms` - the average execution time for the specified key since the profiling has started; _sorting column name: `avgMs`_
 - `maxms` - the longest execution time for the specified key on record; _sorting column name: `maxMs`_
-- `totalms` - the total execution time for the specified key since the profiling has started; _sorting column names: `totalSec`, `totalMs`_
+- `totalms` - the total cumulative execution time for the specified key since the profiling has started; _sorting column names: `totalMs`_
+- `onms` - the total continuous execution time for the specified key since the profiling has started; _sorting column names: `onMs`_; IMPORTANT: this field doesn't provide a reliable value if `__pfdiscard()` has been used for a specific profiling key!
 - `max event time` - the timepoint at which the value from `maxms` was recorded
 - `CPU%` - the load of the OS CPU during the hit duration; if multiple CPUs are reported by the OS, the highest value is taken; it is normal for this value to be close to 100% - this means that during the profiling hit the application's main thread did not wait; _sorting column name: `avgCpu`_
 - `minCPU%` - the minimum OS CPU load, measured for the last 1 minute at the end of a profiling hit for the specified key (this value has no direct relation to the `CPU%` value); _sorting column name: `minAvgOsCpu`_

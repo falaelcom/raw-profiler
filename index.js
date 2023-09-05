@@ -7,22 +7,20 @@
 //				- introduce configuration filed type ("preconf", "runtime", "hardcod", "remote") in configuration templates
 //				- streamline run-time configuration changes through configuration templates; streamline all configuration through configuration templates
 //			- create no default instances
-//		- add verbosity "log" - no table printout, only text+postfix
-//			- optimize implementation of "__pflog"
 //		+ provide same initial configuration options from code (the`__pfconfig` function call) and from file (the `__pfconfig` file JSON).
 //			+ design a strategy for profiling of multiple npm modules that create separate profiler instances
 //			- examine the `__pfenabled` effect on logging server
-//		+ add remote configuration acquisition from a logging server rest point
-//			- test thoroughly
 //		- make sure all open hits end before the profiler/bucket enabled state changes
-//		- there are several flags such as `isRefreshing`; if necessary, add code to make sure that no exception or error might leave such flags up forever
+//		- there are several flags such as `isRefreshing`; enumerate all flags; if necessary, add code to make sure that no exception or error might leave such flags up forever
 //		- the CPU usage is being calculated based on OS and not node js process CPU stats (older node js versions lack a required api). Desired solution - detect node js version and enable node js process CPU stats when possible.
 //		- make system stats modular; provide modules for CPU/RAM, disk space, log and archive size, mongodb server info, rabbitmq info.
+//		- allow for formatting override
 //		- force `__pfflush` to wait for any archiving started by the file logger before invoking the callback
 //		- allow user to completely override any console logging done by raw-profiler
 //		- do sth with the default instances and console logging, including letting the user configure console logging instead of using `console.log` directly
 //		- implement a new profiler http proxy /data collector server pair that doesn't store any state on the application server and
 //			instead proxies all single `__pfbegin/__pfend/__pflog/__pfflush` calls directly to the data collector server
+//		- possible problem: why so often log files get archived without new log files being created ? seems at odds that so often archiving happens precisely
 //	DEBT:
 //	    -- migrate to async/await syntax
 //		-- replace all `.bind` calls with lambda functions
@@ -30,6 +28,7 @@
 //		-- get rid of all `fs.*Sync` calls in FileLogger; currently synch calls only affect the logging server, and the task is not of highest priority
 //		-- add parameter value validation throughout the code
 //		-- migrate array sbs to string sbs
+//		-- refactor all event argument lists to start with `sender`
 
 const EventEmitter = require('events');
 EventEmitter.defaultMaxListeners = 666;
@@ -535,7 +534,7 @@ function __pfconfig(par)
 			dataCollector.on("configurationChanged", (...args) => _onConfigurationChanged("data-collector", ...args));
 			return __pf.instance.setDataCollector(dataCollector);
 		} 
-		else dataCollector = __pf.DefaultDataCollector;
+		else return __pf.DefaultDataCollector;
 	}
 	catch (ex)
 	{
@@ -630,6 +629,21 @@ function __pfend(hit, postfix)
 	return __pf.instance.end(hit, postfix);
 }
 
+//	Function: `__pfdiscard(hit: object): null` - remove the `hit` from the ON-time stats.
+//	Parameter: `hit: object` - required; the result of the corresponding `__pfbegin` call.
+//	Returns: Always returns `null`. Recommended as a shortcut for releasing the current profiler hit's state, e.g.:
+//	```
+//	    let hit = __pfbegin("bucketKey1", "key1" [, "text"]);
+//		//	... code to profile
+//		hit = __pfdiscard(hit [, " append to text"]);
+//	```
+//	Remarks: 
+//		This function never throws an exception.
+function __pfdiscard(hit)
+{
+	return __pf.instance.discard(hit);
+}
+
 //	Function: `__pflog(bucketKey: string, ...args): void` - writes `args` as text to the profiling logs without creating a hit point.
 //	Parameter: `bucketKey: string` - a key for grouping and configuration management of profiling data at log-file level; a single profiling bucket usually corresponds to a single
 //		profiling hit point in the code, for Ex. `"CRUD"`, `"REST"`, `"RPC"`, `"VerySpecificSuspiciousLoop"`.
@@ -693,6 +707,7 @@ module.exports =
 		global.__pfenabled = __pfenabled;
 		global.__pfbegin = __pfbegin;
 		global.__pfend = __pfend;
+		global.__pfdiscard = __pfdiscard;
 		global.__pflog = __pflog;
 		global.__pfschema = __pfschema;
 		global.__pfjson = __pfjson;
@@ -705,6 +720,7 @@ module.exports.__pfconfig = __pfconfig;
 module.exports.__pfenabled = __pfenabled;
 module.exports.__pfbegin = __pfbegin;
 module.exports.__pfend = __pfend;
+module.exports.__pfdiscard = __pfdiscard;
 module.exports.__pflog = __pflog;
 module.exports.__pfflush = __pfflush;
 module.exports.__pfschema = __pfschema;
