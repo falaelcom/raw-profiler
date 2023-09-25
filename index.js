@@ -45,6 +45,7 @@ const { DataCollectorHttpProxy } = require("./lib/DataCollectorHttpProxy.js");
 const { MachineStats } = require("./lib/MachineStats.js");
 const { Profiler } = require("./lib/Profiler.js");
 const { DataCollectorServer } = require("./lib/DataCollectorServer.js");
+const { Debouncer } = require("./lib/Debouncer.js");
 
 //#region Interface
 const _onInfo = (source, message) => console.log("[raw-profiler]", `[${source}]`, message);
@@ -696,7 +697,7 @@ function __pfflush(callback, stopLogging = true)
 	return __pf.instance.flush(callback, stopLogging);
 }
 
-MachineStats.startCpuMonitoring();
+MachineStats.startMonitoring();
 
 module.exports =
 {
@@ -735,4 +736,5 @@ module.exports.DataCollectorHttpProxy = DataCollectorHttpProxy;
 module.exports.MachineStats = MachineStats;
 module.exports.Profiler = Profiler;
 module.exports.DataCollectorServer = DataCollectorServer;
+module.exports.Debouncer = Debouncer;
 //#endregion

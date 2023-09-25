@@ -153,6 +153,7 @@ This function never throws an exception. See below for usage examples.
 * `MachineStats` - The `MachineStats` class;
 * `Profiler` - The `Profiler` class;
 * `DataCollectorServer` - The `DataCollectorServer` class.
+* `Debouncer` - The `Debouncer` class.
 
 _NOTE: When required, the `raw-profiler` module starts its own system and process resources monitoring timer with resolution 5s (non-configurable). The collected stats are used for profiling and are available at any time via `__pf.osResourceStats` as well. All values are updated every 5 seconds. Using cached values prevents the nodejs process from exhausting available file descriptors on extremely heavy server loads (every sytem/process resource check is done by reading from a /proc/* or /sys/* or /dev/* file). Because of the caching, the RAM deltas reported in log files are no more precise (the 5s update resolution is way too large for a typical profiling hit), but can be informative when profiling long-lasting processes._
 
@@ -212,7 +213,7 @@ Here is a very simple NodeJS application implementing a single profiling hit poi
         {
             err = ex;
         }
-        if (__pfenabled())
+        if (hit)
         {
             const postfix = err ? "; error=" + err : "";
             hit = __pfend(hit, postfix);
@@ -483,7 +484,7 @@ keys), e.g.
     {
         err = ex;
     }
-    if(__pfenabled())
+    if(hit)
     {
         hit = __pfend(hit, err ? "; error=" + err : "");   //  __pfend always returns null; assigning null to hit helps to prevent reusing the hit's state by mistake after its lifetime has ended
     }
