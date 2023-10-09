@@ -815,6 +815,9 @@ NOTES
 - Multiple applications/node instances can feed into the same data collector server; different sources will be differentiated based on the feed source server's IP, combined with the `sourceKey` setting of the corresponding application server.
 - The profiler rereads the configuration file on every profiling hit but no more than once every 5 seconds (configurable).
 - The __pf* public methods never throw exceptions (all exceptions are logged to the console instead).
+- In the stats tables, "CPU/Process", values above 100% is due to the async nature of system IO calls. It's crucial to understand that these measurements (process.cpuUsage()) represent CPU time, not wall-clock time. If your process is running on a multi-core system, and it's able to utilize multiple cores, the cumulative user and system time could theoretically be more than the elapsed wall-clock time during a given interval. This scenario could happen if multiple threads (like worker threads or internal threads of the Node.js runtime) are running in parallel on different cores.
+
+
 
 TODO
 ==================================================

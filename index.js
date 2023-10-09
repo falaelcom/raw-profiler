@@ -21,6 +21,7 @@
 //		- implement a new profiler http proxy /data collector server pair that doesn't store any state on the application server and
 //			instead proxies all single `__pfbegin/__pfend/__pflog/__pfflush` calls directly to the data collector server
 //		- possible problem: why so often log files get archived without new log files being created ? seems at odds that so often archiving happens precisely
+//		- __pfconfig per sourceKey
 //	DEBT:
 //	    -- migrate to async/await syntax
 //		-- replace all `.bind` calls with lambda functions
@@ -181,21 +182,21 @@ const __pf =
 			runtimeConfigurator,
 			host: par.host || "0.0.0.0",
 			port: par.port || 9666,
-			createDataCollector(sourceKey, currentConfig)
+			createDataCollector(sourceKey, config)
 			{
 				const fileLogger = new FileLogger(
 				{
 					runtimeConfigurator,
 					runtimeInitial:
 					{
-						verbosity: currentConfig?.["logger.verbosity"] || par.fileLogger?.verbosity || EVerbosity.Full,
-						logPath: currentConfig?.["logger.logPath"] || par.fileLogger?.logPath || "__pflogs",
-						archivePath: currentConfig?.["logger.archivePath"] || par.fileLogger?.archivePath || "__pfarchive",
-						maxLogSizeBytes: !isNaN(currentConfig?.["logger.maxLogSizeBytes"]) ? currentConfig?.["logger.maxLogSizeBytes"] :
+						verbosity: config?.["logger.verbosity"] || par.fileLogger?.verbosity || EVerbosity.Full,
+						logPath: config?.["logger.logPath"] || par.fileLogger?.logPath || "__pflogs",
+						archivePath: config?.["logger.archivePath"] || par.fileLogger?.archivePath || "__pfarchive",
+						maxLogSizeBytes: !isNaN(config?.["logger.maxLogSizeBytes"]) ? config?.["logger.maxLogSizeBytes"] :
 							(par.fileLogger && !isNaN(par.fileLogger.maxLogSizeBytes)) ? par.fileLogger.maxLogSizeBytes : 200 * 1024 * 1024, //  200MB
-						maxArchiveSizeBytes: !isNaN(currentConfig?.["logger.maxArchiveSizeBytes"]) ? currentConfig?.["logger.maxArchiveSizeBytes"] :
+						maxArchiveSizeBytes: !isNaN(config?.["logger.maxArchiveSizeBytes"]) ? config?.["logger.maxArchiveSizeBytes"] :
 							(par.fileLogger && !isNaN(par.fileLogger.maxArchiveSizeBytes)) ? par.fileLogger.maxArchiveSizeBytes : 1024 * 1024 * 1024,	//  1GB
-						logRequestArchivingModulo: !isNaN(currentConfig?.["logger.logRequestArchivingModulo"]) ? currentConfig?.["logger.logRequestArchivingModulo"] :
+						logRequestArchivingModulo: !isNaN(config?.["logger.logRequestArchivingModulo"]) ? config?.["logger.logRequestArchivingModulo"] :
 							(par.fileLogger && !isNaN(par.fileLogger.logRequestArchivingModulo)) ? par.fileLogger.logRequestArchivingModulo : 100,
 					},
 					sourceKey,
@@ -209,13 +210,13 @@ const __pf =
 					runtimeConfigurator,
 					runtimeInitial:
 					{
-						sortColumn: currentConfig?.["sortColumn"] || par.dataCollector?.sortColumn || "maxMs",
+						sortColumn: config?.["sortColumn"] || par.dataCollector?.sortColumn || "maxMs",
 					},
 					logger: fileLogger,
 					flushDelayMs: (par.dataCollector && !isNaN(par.dataCollector.flushDelayMs)) ? 
 					par.dataCollector.flushDelayMs : 0,
 				};
-				if (currentConfig) for (const key in currentConfig) (key.indexOf("bucket.") === 0) && (arg.runtimeInitial[key] = currentConfig[key]);
+				if (config) for (const key in config) (key.indexOf("bucket.") === 0) && (arg.runtimeInitial[key] = config[key]);
 				const result = new DataCollector(arg);
 				result.on("info", (...args) => _onInfo(`data-collector:${sourceKey}`, ...args));
 				result.on("error", (...args) => _onError(`data-collector:${sourceKey}`, ...args));

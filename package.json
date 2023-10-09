@@ -1,6 +1,6 @@
 {
     "name": "raw-profiler",
-    "version": "1.0.19-alpha.18",
+    "version": "1.0.19-alpha.19",
     "description": "A robust, heavy-duty profiler and logger for nodejs applications production environments.",
     "main": "index.js",
     "keywords":
@@ -15,7 +15,7 @@
     "repository":
     {
         "type": "git",
-        "url": "https://github.com/falaelcom/raw-profiler.git"
+        "url": "git+https://github.com/falaelcom/raw-profiler.git"
     },
     "maintainers":
     [
